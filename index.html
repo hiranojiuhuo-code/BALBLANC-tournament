@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>対抗戦 進行管理</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --panel:#fff; --line:#e2e6ea; --text:#1f2933; --muted:#7b8794;
+    --ready:#2fa84f; --readybg:#e9f7ee; --busy:#c92a2a; --busybg:#fdecea;
+    --live:#f59f00; --livebg:#fff6e0; --done:#94a3b8; --accent:#2f6df6;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    background:var(--bg);color:var(--text);font-size:15px;line-height:1.5}
+  header{position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);
+    padding:8px 14px;display:flex;flex-direction:column;gap:8px}
+  .topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  h1{font-size:17px;margin:0;font-weight:700}
+  nav{display:flex;gap:4px;flex-wrap:wrap}
+  nav button{border:0;background:transparent;padding:8px 14px;border-radius:8px;font-size:14px;
+    color:var(--muted);cursor:pointer;font-weight:600}
+  nav button.active{background:var(--accent);color:#fff}
+  main{padding:14px;max-width:1200px;margin:0 auto}
+  .courts{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:20px}
+  .court{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;min-height:130px;
+    display:flex;flex-direction:column;gap:8px}
+  .court.live{border-color:var(--live);box-shadow:0 0 0 2px var(--livebg)}
+  .court-head{display:flex;justify-content:space-between;align-items:center}
+  .court-name{font-weight:700;font-size:15px}
+  .court-empty{color:var(--muted);font-size:13px;display:flex;align-items:center;justify-content:center;
+    flex:1;min-height:60px;border:1.5px dashed var(--line);border-radius:10px}
+  .matchcard{border-radius:10px;padding:10px;border:1px solid var(--line);background:#fff;cursor:pointer;
+    transition:.1s;position:relative}
+  .matchcard:active{transform:scale(.99)}
+  .mc-mu{font-size:11px;color:var(--muted);font-weight:600;margin-bottom:3px}
+  .mc-tag{font-size:11px;font-weight:700;color:#fff;background:var(--muted);border-radius:6px;
+    padding:1px 7px;display:inline-block;margin-bottom:6px}
+  .mc-tag.M{background:#7048e8}.mc-tag.S{background:#0c8599}.mc-tag.D{background:#1864ab}
+  .mc-side{font-size:14px;font-weight:600}
+  .mc-vs{color:var(--muted);font-size:12px;margin:2px 0}
+  .badge{font-size:11px;font-weight:700;border-radius:6px;padding:2px 8px;display:inline-block}
+  .badge.ready{background:var(--readybg);color:var(--ready)}
+  .badge.busy{background:var(--busybg);color:var(--busy)}
+  .badge.live{background:var(--livebg);color:#b07400}
+  .pool-section{margin-bottom:18px}
+  .pool-title{font-weight:700;margin:0 0 8px;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .pool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+  .matchcard.ready{border-color:var(--ready);background:var(--readybg)}
+  .matchcard.busy{opacity:.7}
+  .mc-busyinfo{font-size:11px;color:var(--busy);margin-top:4px}
+  .btn{border:0;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.ghost{background:#eef1f4;color:var(--text)}
+  .btn.done{background:var(--ready);color:#fff}
+  .btn.sm{padding:5px 10px;font-size:12px}
+  .court .btn{width:100%}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:12px;overflow:hidden}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);font-size:13px}
+  th{background:#f0f3f6;font-size:12px;color:var(--muted);font-weight:700}
+  tr:last-child td{border-bottom:0}
+  .filterbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 13px;font-size:13px;
+    cursor:pointer;font-weight:600;color:var(--muted)}
+  .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .modal-bg{position:fixed;inset:0;background:rgba(20,30,40,.45);display:flex;align-items:center;
+    justify-content:center;z-index:50;padding:16px}
+  .modal{background:#fff;border-radius:16px;padding:18px;width:100%;max-width:460px;max-height:88vh;overflow:auto}
+  .modal h3{margin:0 0 14px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px}
+  select,input[type=text],input[type=number]{width:100%;padding:9px;border:1px solid var(--line);
+    border-radius:8px;font-size:14px;background:#fff;font-family:inherit}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap}
+  .banner{background:#fff8e6;border:1px solid #ffe08a;color:#8a6d00;border-radius:10px;padding:10px 12px;
+    font-size:13px;margin-bottom:14px}
+  .pill{display:inline-block;background:#eef1f4;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:600}
+  .empty-note{color:var(--muted);font-size:13px;padding:20px;text-align:center}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:240px}
+  .danger{color:var(--busy)}
+  .standings{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 12px;margin-bottom:16px;overflow:auto}
+  .standings table{background:transparent}
+  .standings td,.standings th{border-bottom:1px solid var(--line);white-space:nowrap}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .mu-select{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+  .teamcards{display:flex;gap:18px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header>
+  <div class="topbar">
+    <h1>🎾 <span id="appTitle">対抗戦 進行管理</span></h1>
+    <button class="btn primary" id="importBtn" style="font-size:13px">📷 写真から取り込み</button>
+  </div>
+  <nav>
+    <button data-view="board" class="active">進行ボード</button>
+    <button data-view="list">試合一覧</button>
+    <button data-view="players">選手・チーム</button>
+    <button data-view="saves">保存データ</button>
+    <button data-view="settings">設定</button>
+  </nav>
+</header>
+<main id="app"></main>
+<div id="modal-root"></div>
+
+<script>
+/* ============================ データ層 ============================ */
+const LS_KEY = 'tennis_taikousen_v2';
+const CATS = {S:'シングルス', D:'ダブルス', M:'ミックス'};
+const PALETTE = ['#2f6df6','#e8590c','#2fa84f','#7048e8','#c2255c','#0c8599','#495057','#d6336c'];
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+
+function defaultData(){
+  // 初期は空。チーム・対抗戦・試合はすべて写真取り込み（または手動）から作る。
+  return { teams:[], players:[], matchups:[], matches:[], courtCount:4, title:'大会',
+    ai:{ provider:'gemini', key:'', model:'gemini-2.5-flash' } };
+}
+function sampleData(){
+  const teams = [{id:'t1', name:'あじさい'},{id:'t2', name:'たんぽぽ'}];
+  const players = [];
+  const reg = {};
+  function P(teamId, name, gender){
+    const key=teamId+'|'+name; if(reg[key]) return reg[key];
+    const id=uid(); players.push({id,teamId,name,gender}); reg[key]=id; return id;
+  }
+  const A=(n,g)=>P('t1',n,g), B=(n,g)=>P('t2',n,g);
+  const muAB = muId('t1','t2');
+  const matchups=[{id:muAB,aId:'t1',bId:'t2'}];
+  const matches=[]; let order=0;
+  function M(cat,no,gender,aN,bN){
+    matches.push({id:uid(),matchupId:muAB,cat,no,gender,order:order++,
+      sideA:aN.map(n=>A(n,gender)), sideB:bN.map(n=>B(n,gender)),
+      court:null,status:'pending',scoreA:null,scoreB:null});
+  }
+  // サンプル: あじさい vs たんぽぽ（写真からの推定。要修正）
+  M('S',1,'M',['ゆうき'],['なぐ']); M('S',2,'M',['りき'],['けんた']); M('S',3,'M',['こうた'],['いの']);
+  M('D',1,'M',['りひと','ゆうき'],['まこと','そうま']); M('D',2,'M',['りひと','かぎ'],['けんた','まこと']);
+  M('D',3,'M',['りひと','りき'],['いの','まこと']); M('D',4,'M',['ゆうき','りひと'],['そうま','けんた']);
+  M('D',5,'M',['ゆうき','りき'],['いの','なぐ']); M('D',6,'M',['ゆうき','こうた'],['けんた','なぐ']);
+  M('D',7,'M',['かぎ','りき'],['いの','けんた']); M('D',8,'M',['こうた','りき'],['いの','こういちろう']);
+  M('D',9,'M',['こうた','りき'],['いの','こういちろう']);
+  M('S',1,'F',['たまお'],['あやか']); M('S',2,'F',['もえ'],['ゆきの']); M('S',3,'F',['こはる'],['みゆ']);
+  M('D',1,'F',['たまお','もえ'],['あやか','ゆきの']); M('D',2,'F',['もえ','まいまい'],['ゆきの','あやか']);
+  M('D',3,'F',['まいまい','はるか'],['こころ','あやか']); M('D',4,'F',['まいまい','もえ'],['ゆきの','こころ']);
+  M('D',5,'F',['たまお','ことね'],['あやか','みゆ']); M('D',6,'F',['もえ','こはる'],['ゆきの','はるか']);
+  M('D',7,'F',['まいまい','こはる'],['ゆきの','みゆ']); M('D',8,'F',['まいまい','ことね'],['こころ','はるか']);
+  M('D',9,'F',['こはる','ことね'],['こころ','みゆ']);
+  M('M',1,'X',['ゆうき','まいまい'],['まこと','あやか']); M('M',2,'X',['かぎ','もえ'],['なぐ','こころ']);
+  M('M',3,'X',['こうた','ことね'],['けんた','みゆ']);
+
+  return { teams, players, matchups, matches, courtCount:4, title:'リーグ戦',
+    ai:{ provider:'gemini', key:'', model:'gemini-2.5-flash' } };
+}
+function pairsOf(teams){ const out=[]; for(let i=0;i<teams.length;i++)for(let j=i+1;j<teams.length;j++)out.push([teams[i].id,teams[j].id]); return out; }
+function muId(a,b){ return a<b?a+'__'+b:b+'__'+a; }
+
+let data = load();
+function load(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(raw){ const d=JSON.parse(raw); if(!d.ai)d.ai={provider:'gemini',key:'',model:'gemini-2.5-flash'}; return d; }
+  }catch(e){}
+  return defaultData();
+}
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(data)); }
+
+/* 保存スロット（名前付きスナップショット） */
+const LS_SAVES='tennis_taikousen_saves_v2';
+function loadSaves(){ try{ return JSON.parse(localStorage.getItem(LS_SAVES))||[]; }catch(e){ return []; } }
+function writeSaves(arr){ localStorage.setItem(LS_SAVES, JSON.stringify(arr)); }
+function snapshot(){ return JSON.parse(JSON.stringify({teams:data.teams,players:data.players,matchups:data.matchups,matches:data.matches,courtCount:data.courtCount,title:data.title})); }
+function applySnapshot(payload){ const ai=data.ai; data=Object.assign(defaultData(),JSON.parse(JSON.stringify(payload))); data.ai=ai; }
+function fmtDate(iso){ const d=new Date(iso); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${('0'+d.getHours()).slice(-2)}:${('0'+d.getMinutes()).slice(-2)}`; }
+
+/* ============================ ヘルパー ============================ */
+const pById = id => data.players.find(p=>p.id===id);
+const tById = id => data.teams.find(t=>t.id===id);
+const tName = id => (tById(id)||{name:'?'}).name;
+const muById = id => data.matchups.find(m=>m.id===id);
+function teamColor(id){ const i=data.teams.findIndex(t=>t.id===id); return PALETTE[(i<0?0:i)%PALETTE.length]; }
+function names(ids){ return ids.map(id=>(pById(id)||{name:'?'}).name).join('・'); }
+function muLabel(mu){ return mu?tName(mu.aId)+' vs '+tName(mu.bId):''; }
+function matchLabel(m){ const g=m.gender==='M'?'男子':m.gender==='F'?'女子':'混合'; return m.cat==='M'?'ミックス'+m.no:g+(m.cat==='S'?'S':'D')+m.no; }
+function matchesOf(muId){ return data.matches.filter(m=>m.matchupId===muId); }
+function busyPlayerIds(){ const s=new Set(); data.matches.filter(m=>m.status==='live').forEach(m=>m.sideA.concat(m.sideB).forEach(id=>s.add(id))); return s; }
+function conflictNames(m,busy){ return m.sideA.concat(m.sideB).filter(id=>busy.has(id)).map(id=>(pById(id)||{}).name).filter(Boolean); }
+function freeCourts(){ const used=new Set(data.matches.filter(m=>m.status==='live'&&m.court!=null).map(m=>m.court));
+  const a=[]; for(let i=0;i<data.courtCount;i++) if(!used.has(i)) a.push(i); return a; }
+function liveOnCourt(i){ return data.matches.find(m=>m.status==='live'&&m.court===i); }
+
+function syncMatchups(){
+  // 対抗戦は写真取り込み（または手動追加）で作る。ここでは無効な対抗戦の掃除のみ行い、総当たり生成はしない。
+  const ids = data.teams.map(t=>t.id);
+  data.matchups = data.matchups.filter(mu=>ids.includes(mu.aId)&&ids.includes(mu.bId));
+  const valid = new Set(data.matchups.map(m=>m.id));
+  data.matches = data.matches.filter(m=>valid.has(m.matchupId));
+  data.matchups.sort((x,y)=> (ids.indexOf(x.aId)-ids.indexOf(y.aId)) || (ids.indexOf(x.bId)-ids.indexOf(y.bId)));
+}
+function ensureMatchup(aId,bId){ const id=muId(aId,bId); if(!muById(id)) data.matchups.push({id,aId,bId}); return id; }
+
+function matchupScore(muId){ let a=0,b=0; matchesOf(muId).filter(m=>m.status==='done'&&m.scoreA!=null).forEach(m=>{ if(m.scoreA>m.scoreB)a++; else if(m.scoreB>m.scoreA)b++; }); return {a,b}; }
+function standings(){
+  const map={}; data.teams.forEach(t=>map[t.id]={id:t.id,name:t.name,muW:0,muL:0,muD:0,mw:0,ml:0});
+  data.matchups.forEach(mu=>{
+    const s=matchupScore(mu.id); if(s.a===0&&s.b===0) return; // 未実施はスキップ
+    map[mu.aId].mw+=s.a; map[mu.aId].ml+=s.b; map[mu.bId].mw+=s.b; map[mu.bId].ml+=s.a;
+    if(s.a>s.b){map[mu.aId].muW++;map[mu.bId].muL++;}
+    else if(s.b>s.a){map[mu.bId].muW++;map[mu.aId].muL++;}
+    else {map[mu.aId].muD++;map[mu.bId].muD++;}
+  });
+  return Object.values(map).sort((x,y)=> y.muW-x.muW || (y.mw-y.ml)-(x.mw-x.ml) || y.mw-x.mw);
+}
+
+/* ============================ 描画 ============================ */
+let view='board', listFilter='all', listMu='all', curMu='__all';
+
+function render(){
+  document.getElementById('appTitle').textContent = data.title||'対抗戦 進行管理';
+  if(curMu!=='__all' && !muById(curMu)) curMu='__all';
+  const app=document.getElementById('app');
+  if(view==='board') app.innerHTML=renderBoard();
+  else if(view==='list') app.innerHTML=renderList();
+  else if(view==='players') app.innerHTML=renderPlayers();
+  else if(view==='saves') app.innerHTML=renderSaves();
+  else if(view==='settings') app.innerHTML=renderSettings();
+  bindView(); save();
+}
+
+function muChips(current, attr){
+  let h=`<span class="chip ${current==='__all'?'on':''}" ${attr}="__all">全対抗戦</span>`;
+  data.matchups.forEach(mu=>{
+    const n=matchesOf(mu.id).length;
+    h+=`<span class="chip ${current===mu.id?'on':''}" ${attr}="${mu.id}">${muLabel(mu)}${n?` (${n})`:' (空)'}</span>`;
+  });
+  return h;
+}
+
+function renderStandings(){
+  const rows=standings().map((s,i)=>`<tr>
+    <td>${i+1}</td>
+    <td><span class="dot" style="background:${teamColor(s.id)}"></span>${s.name}</td>
+    <td>${s.muW}勝${s.muL}敗${s.muD?s.muD+'分':''}</td>
+    <td>${s.mw}-${s.ml}</td></tr>`).join('');
+  return `<div class="standings"><table><thead><tr><th>#</th><th>チーム</th><th>対抗戦</th><th>試合(勝-負)</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+function matchCard(m, busy, clickable){
+  const conf=conflictNames(m,busy), ready=conf.length===0;
+  const mu=muById(m.matchupId);
+  const ac=teamColor(mu.aId), bc=teamColor(mu.bId);
+  return `<div class="matchcard ${ready?'ready':'busy'}" ${clickable?`data-act="open-assign" data-id="${m.id}"`:''}>
+    <div class="mc-mu">${muLabel(mu)}</div>
+    <span class="mc-tag ${m.cat}">${matchLabel(m)}</span>
+    ${ready?'<span class="badge ready">組める</span>':'<span class="badge busy">出場者が試合中</span>'}
+    <div class="mc-side" style="color:${ac}">${names(m.sideA)}</div>
+    <div class="mc-vs">vs</div>
+    <div class="mc-side" style="color:${bc}">${names(m.sideB)}</div>
+    ${conf.length?`<div class="mc-busyinfo">⚠ ${conf.join('、')} が他コートで試合中</div>`:''}
+  </div>`;
+}
+
+function renderBoard(){
+  if(data.matchups.length===0){
+    return `<div class="card" style="text-align:center;padding:36px 18px">
+      <div style="font-size:40px">📷</div>
+      <h3>対戦表の写真を取り込んでください</h3>
+      <p style="color:var(--muted)">手書きの対戦表を撮影／選択すると、チーム・対抗戦・試合を自動で作成します。複数枚をまとめてアップすると、タイトルごとに別々の対抗戦として取り込みます。</p>
+      <button class="btn primary" data-act="open-import">📷 写真から取り込み</button>
+      <div style="margin-top:14px"><button class="btn ghost sm" data-act="load-sample">サンプルを読み込んで試す</button></div>
+    </div>`;
+  }
+  const busy=busyPlayerIds();
+  let html=renderStandings();
+  html+=`<div class="mu-select">${muChips(curMu,'data-mu')}</div>`;
+  if(curMu!=='__all'){ const s=matchupScore(curMu),mu=muById(curMu);
+    html+=`<div class="pool-title" style="font-size:16px">
+      <span style="color:${teamColor(mu.aId)}">${tName(mu.aId)}</span>
+      <span class="pill" style="font-size:16px">${s.a} - ${s.b}</span>
+      <span style="color:${teamColor(mu.bId)}">${tName(mu.bId)}</span></div>`;
+  }
+  // コート（全対抗戦共通）
+  let courts='<div class="courts">';
+  for(let i=0;i<data.courtCount;i++){
+    const m=liveOnCourt(i);
+    courts+=`<div class="court ${m?'live':''}"><div class="court-head"><span class="court-name">コート${i+1}</span>
+      ${m?'<span class="badge live">進行中</span>':'<span class="badge ready">空き</span>'}</div>`;
+    if(m){ const mu=muById(m.matchupId);
+      courts+=`<div class="matchcard" style="cursor:default">
+        <div class="mc-mu">${muLabel(mu)}</div>
+        <span class="mc-tag ${m.cat}">${matchLabel(m)}</span>
+        <div class="mc-side" style="color:${teamColor(mu.aId)}">${names(m.sideA)}</div>
+        <div class="mc-vs">vs</div>
+        <div class="mc-side" style="color:${teamColor(mu.bId)}">${names(m.sideB)}</div></div>
+        <button class="btn done" data-act="finish" data-id="${m.id}">試合終了・結果入力</button>`;
+    } else courts+=`<div class="court-empty">下の試合から選んで入れます</div>`;
+    courts+=`</div>`;
+  }
+  courts+='</div>';
+  html+=courts;
+
+  // 待機プール
+  let pending=data.matches.filter(m=>m.status==='pending');
+  if(curMu!=='__all') pending=pending.filter(m=>m.matchupId===curMu);
+  pending.sort((a,b)=> data.matchups.findIndex(x=>x.id===a.matchupId)-data.matchups.findIndex(x=>x.id===b.matchupId) || a.order-b.order);
+  const ready=pending.filter(m=>conflictNames(m,busy).length===0);
+  const blocked=pending.filter(m=>conflictNames(m,busy).length>0);
+  const fc=freeCourts();
+  html+=`<div class="pool-section"><div class="pool-title">✅ いま組める試合（${ready.length}）
+    <span class="pill">空きコート ${fc.length}面</span></div>
+    <div class="pool-grid">${ready.map(m=>matchCard(m,busy,true)).join('')||'<div class="empty-note">なし</div>'}</div></div>`;
+  if(blocked.length) html+=`<div class="pool-section"><div class="pool-title">⏳ 出場者が試合中で組めない（${blocked.length}）</div>
+    <div class="pool-grid">${blocked.map(m=>matchCard(m,busy,true)).join('')}</div></div>`;
+  const scope = curMu==='__all'?data.matches:matchesOf(curMu);
+  html+=`<div class="empty-note">完了 ${scope.filter(m=>m.status==='done').length} / 全 ${scope.length} 試合</div>`;
+  return html;
+}
+
+function renderList(){
+  let bar=`<div class="filterbar">${muChips(listMu,'data-listmu')}</div>`;
+  const cats=[['all','すべて'],['S','S'],['D','D'],['M','ミックス'],['pending','未'],['live','進行中'],['done','完了']];
+  bar+='<div class="filterbar">'+cats.map(c=>`<span class="chip ${listFilter===c[0]?'on':''}" data-filter="${c[0]}">${c[1]}</span>`).join('')+'</div>';
+  let ms=data.matches.slice();
+  if(listMu!=='all') ms=ms.filter(m=>m.matchupId===listMu);
+  if(['S','D','M'].includes(listFilter)) ms=ms.filter(m=>m.cat===listFilter);
+  if(['pending','live','done'].includes(listFilter)) ms=ms.filter(m=>m.status===listFilter);
+  ms.sort((a,b)=> data.matchups.findIndex(x=>x.id===a.matchupId)-data.matchups.findIndex(x=>x.id===b.matchupId) || a.order-b.order);
+  const rows=ms.map(m=>{ const mu=muById(m.matchupId); let score='';
+    if(m.status==='done'&&m.scoreA!=null){ const aw=m.scoreA>m.scoreB,bw=m.scoreB>m.scoreA;
+      score=`<b style="color:${aw?teamColor(mu.aId):'inherit'}">${m.scoreA}</b> - <b style="color:${bw?teamColor(mu.bId):'inherit'}">${m.scoreB}</b>`; }
+    return `<tr>
+      <td style="font-size:11px;color:var(--muted)">${muLabel(mu)}</td>
+      <td><span class="mc-tag ${m.cat}">${matchLabel(m)}</span></td>
+      <td style="color:${teamColor(mu.aId)};font-weight:700">${names(m.sideA)}</td>
+      <td style="color:${teamColor(mu.bId)};font-weight:700">${names(m.sideB)}</td>
+      <td>${score}</td>
+      <td>${m.status==='live'?'<span class="badge live">進行中</span>':m.status==='done'?'完了':'未'}</td>
+      <td><button class="btn ghost sm" data-act="edit" data-id="${m.id}">編集</button></td></tr>`;
+  }).join('');
+  return `<button class="btn primary" data-act="add" style="margin-bottom:12px">＋ 試合を追加</button>`+bar+
+    `<table><thead><tr><th>対抗戦</th><th>種目</th><th>A側</th><th>B側</th><th>スコア</th><th>状態</th><th></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan=7 class="empty-note">なし</td></tr>'}</tbody></table>`;
+}
+
+function renderPlayers(){
+  let out=`<div class="banner">選手をタップで編集。試合の出場者は「試合一覧」→編集 から設定します。</div><div class="teamcards">`;
+  data.teams.forEach(t=>{ const ps=data.players.filter(p=>p.teamId===t.id);
+    out+=`<div class="card" style="flex:1;min-width:200px">
+      <h3 style="margin-top:0;color:${teamColor(t.id)}">${t.name}（${ps.length}名）</h3>
+      <table><tbody>${ps.map(p=>`<tr><td>${p.name}</td><td>${p.gender==='M'?'男':p.gender==='F'?'女':'-'}</td>
+        <td style="text-align:right"><button class="btn ghost sm" data-act="edit-player" data-id="${p.id}">編集</button></td></tr>`).join('')||'<tr><td class="empty-note">選手なし</td></tr>'}</tbody></table>
+      <button class="btn ghost sm" data-act="add-player" data-team="${t.id}" style="margin-top:10px">＋ 選手を追加</button></div>`;
+  });
+  return out+'</div>';
+}
+
+function renderSettings(){
+  const ai=data.ai;
+  const provHelp={
+    gemini:'無料枠あり。<a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> でキー取得。429エラー時はモデル名を gemini-2.5-flash 等に変更。',
+    claude:'有料。<a href="https://console.anthropic.com/settings/keys" target="_blank">Anthropic Console</a> で取得。高精度。',
+    openai:'有料。<a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a> で取得。'};
+  let teamRows=data.teams.map(t=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+    <span class="dot" style="background:${teamColor(t.id)}"></span>
+    <input type="text" data-team-name="${t.id}" value="${t.name}">
+    <button class="btn ghost sm danger" data-act="del-team" data-id="${t.id}">削除</button></div>`).join('');
+  return `<div class="card" style="max-width:480px">
+    <div class="field"><label>大会タイトル</label><input type="text" id="set-title" value="${data.title||''}"></div>
+    <div class="field"><label>コート数（同時進行できる試合数）</label>
+      <input type="number" id="set-courts" min="1" max="16" value="${data.courtCount}"></div>
+    <div class="modal-actions"><button class="btn primary" data-act="save-basic">保存</button></div>
+  </div>
+  <div class="card" style="max-width:480px;margin-top:16px">
+    <h3 style="margin-top:0">チーム（${data.teams.length}）と対抗戦（${data.matchups.length}）</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">チーム・対抗戦は写真取り込みで自動作成されます。ここでは手動の調整もできます。</p>
+    ${teamRows||'<p style="color:var(--muted);font-size:13px">まだチームがありません。写真から取り込むと自動で作成されます。</p>'}
+    <button class="btn ghost sm" data-act="add-team" style="margin-top:4px">＋ チームを追加</button>
+    <div class="modal-actions"><button class="btn primary" data-act="save-teams">チーム名を保存</button></div>
+    ${data.teams.length>=2?`<hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+      <label style="font-size:12px;font-weight:700;color:var(--muted)">対抗戦を手動で追加</label>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <select id="mu-a">${data.teams.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}</select>
+        <span>vs</span>
+        <select id="mu-b">${data.teams.map((t,i)=>`<option value="${t.id}" ${i===1?'selected':''}>${t.name}</option>`).join('')}</select>
+        <button class="btn ghost sm" data-act="add-matchup">追加</button></div>`:''}
+    <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+    <button class="btn ghost sm" data-act="load-sample">サンプルを読み込んで試す</button>
+  </div>
+  <div class="card" style="max-width:480px;margin-top:16px">
+    <h3 style="margin-top:0">📷 写真取り込み（AI画像認識）</h3>
+    <div class="field"><label>使用するAI</label><select id="ai-provider">
+      <option value="gemini" ${ai.provider==='gemini'?'selected':''}>Google Gemini（無料枠あり・推奨）</option>
+      <option value="claude" ${ai.provider==='claude'?'selected':''}>Claude（有料・高精度）</option>
+      <option value="openai" ${ai.provider==='openai'?'selected':''}>OpenAI（有料）</option></select></div>
+    <div class="field"><label>APIキー（この端末内のみに保存）</label><input type="text" id="ai-key" value="${ai.key||''}" placeholder="キーを貼り付け"></div>
+    <div class="field"><label>モデル名</label><input type="text" id="ai-model" value="${ai.model||''}"></div>
+    <div class="banner" id="ai-help" style="margin-bottom:8px">${provHelp[ai.provider]}</div>
+    <div class="modal-actions"><button class="btn primary" data-act="save-ai">保存</button></div>
+  </div>
+  <div class="card" style="max-width:480px;margin-top:16px">
+    <button class="btn ghost" data-act="reset-status">全試合を「未」に戻す（進行リセット）</button>
+    <div style="margin-top:10px"><button class="btn ghost danger" data-act="reset-all">すべて初期データに戻す</button></div>
+  </div>`;
+}
+
+function renderSaves(){
+  const saves=loadSaves().slice().sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));
+  const rows=saves.map(s=>{
+    const p=s.payload||{};
+    return `<tr>
+      <td><b>${s.name||'(無名)'}</b></td>
+      <td style="color:var(--muted);font-size:12px">${s.savedAt?fmtDate(s.savedAt):''}</td>
+      <td>${(p.teams||[]).length}チーム / ${(p.matchups||[]).length}対抗戦 / ${(p.matches||[]).length}試合</td>
+      <td style="white-space:nowrap;text-align:right">
+        <button class="btn primary sm" data-act="load-save" data-id="${s.id}">読み込む</button>
+        <button class="btn ghost sm" data-act="overwrite-save" data-id="${s.id}">上書き</button>
+        <button class="btn ghost sm" data-act="rename-save" data-id="${s.id}">名前</button>
+        <button class="btn ghost sm" data-act="export-save" data-id="${s.id}">⬇</button>
+        <button class="btn ghost sm danger" data-act="del-save" data-id="${s.id}">削除</button>
+      </td></tr>`;
+  }).join('');
+  return `<div class="banner">現在の大会データに名前を付けて保存し、あとから読み込めます。保存先はこのブラウザ内です。別の端末／ブラウザへ移すときは「⬇」でファイルに書き出し、移行先で「ファイルから読み込む」を使ってください。</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn primary" data-act="save-new">＋ 現在の大会を保存</button>
+      <button class="btn ghost" data-act="import-file">📁 ファイルから読み込む</button>
+      <input type="file" id="save-import" accept="application/json,.json" style="display:none">
+    </div>
+    <table><thead><tr><th>名前</th><th>保存日時</th><th>内容</th><th></th></tr></thead>
+      <tbody>${rows||'<tr><td colspan=4 class="empty-note">保存データはありません</td></tr>'}</tbody></table>`;
+}
+
+/* ============================ モーダル ============================ */
+function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
+let _confirmCb=null, _promptCb=null;
+function confirmModal(msg, cb){ _confirmCb=cb;
+  modal(`<h3>確認</h3><p style="margin-top:0">${msg}</p>
+    <div class="modal-actions"><button class="btn ghost" data-act="cancel">キャンセル</button>
+    <button class="btn primary" data-act="confirm-ok">OK</button></div>`); }
+function promptModal(title, value, cb){ _promptCb=cb;
+  modal(`<h3>${title}</h3><div class="field"><input type="text" id="pm-input" value="${(value||'').replace(/"/g,'&quot;')}"></div>
+    <div class="modal-actions"><button class="btn ghost" data-act="cancel">キャンセル</button>
+    <button class="btn primary" data-act="prompt-ok">OK</button></div>`);
+  setTimeout(()=>{const el=document.getElementById('pm-input'); if(el){el.focus();el.select();}},30); }
+function toast(msg){ const t=document.createElement('div'); t.textContent=msg;
+  t.style.cssText='position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#1f2933;color:#fff;padding:10px 18px;border-radius:10px;z-index:99;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25)';
+  document.body.appendChild(t); setTimeout(()=>t.remove(),1800); }
+function modal(html){ document.getElementById('modal-root').innerHTML=`<div class="modal-bg" data-bg="1"><div class="modal">${html}</div></div>`;
+  document.querySelector('[data-bg]').addEventListener('click',e=>{ if(e.target.dataset.bg) closeModal(); }); }
+
+function openAssign(id){
+  const m=data.matches.find(x=>x.id===id), busy=busyPlayerIds(), conf=conflictNames(m,busy), fc=freeCourts(), mu=muById(m.matchupId);
+  let body=`<h3>${matchLabel(m)} を入れる</h3><div class="mc-mu" style="margin-bottom:6px">${muLabel(mu)}</div>
+    <div class="matchcard" style="cursor:default;margin-bottom:14px">
+      <div class="mc-side" style="color:${teamColor(mu.aId)}">${names(m.sideA)}</div><div class="mc-vs">vs</div>
+      <div class="mc-side" style="color:${teamColor(mu.bId)}">${names(m.sideB)}</div></div>`;
+  if(conf.length) body+=`<div class="banner">⚠ ${conf.join('、')} が現在ほかのコートで試合中です。それでも入れますか？</div>`;
+  if(fc.length===0) body+=`<div class="banner danger">空いているコートがありません。先にどこかの試合を終了してください。</div>
+    <div class="modal-actions"><button class="btn ghost" data-act="cancel">閉じる</button></div>`;
+  else body+=`<div class="field"><label>入れるコート</label><select id="assign-court">
+    ${fc.map(i=>`<option value="${i}">コート${i+1}</option>`).join('')}</select></div>
+    <div class="modal-actions"><button class="btn ghost" data-act="cancel">キャンセル</button>
+    <button class="btn primary" data-act="do-assign" data-id="${m.id}">このコートで開始</button></div>`;
+  modal(body);
+}
+function openFinish(id){ const m=data.matches.find(x=>x.id===id), mu=muById(m.matchupId);
+  modal(`<h3>${matchLabel(m)} 結果入力</h3>
+    <div class="row2">
+      <div class="field"><label style="color:${teamColor(mu.aId)}">${names(m.sideA)}</label><input type="number" id="fa" min="0" value="${m.scoreA??''}" placeholder="得点"></div>
+      <div class="field"><label style="color:${teamColor(mu.bId)}">${names(m.sideB)}</label><input type="number" id="fb" min="0" value="${m.scoreB??''}" placeholder="得点"></div></div>
+    <div class="modal-actions"><button class="btn ghost" data-act="cancel">キャンセル</button>
+    <button class="btn done" data-act="do-finish" data-id="${m.id}">確定して終了</button></div>`);
+}
+
+function openEditMatch(id){
+  const m=id?data.matches.find(x=>x.id===id):null, isNew=!m;
+  if(isNew && data.matchups.length===0){
+    modal(`<h3>試合を追加</h3><div class="banner">先に対抗戦が必要です。写真を取り込むか、設定でチームと対抗戦を追加してください。</div>
+      <div class="modal-actions"><button class="btn ghost" data-act="cancel">閉じる</button><button class="btn primary" data-act="open-import">📷 写真から取り込み</button></div>`);
+    return;
+  }
+  const cur=m?{matchupId:m.matchupId,cat:m.cat,no:m.no,gender:m.gender,sideA:[...m.sideA],sideB:[...m.sideB]}
+    :{matchupId:(curMu!=='__all'?curMu:(data.matchups[0]||{}).id),cat:'S',no:1,gender:'M',sideA:[],sideB:[]};
+  const sizeFor=c=>c==='S'?1:2;
+  function picker(side){ const mu=muById(cur.matchupId); if(!mu) return '';
+    const teamId=side==='A'?mu.aId:mu.bId, arr=side==='A'?cur.sideA:cur.sideB, n=sizeFor(cur.cat);
+    const ps=data.players.filter(p=>p.teamId===teamId); let h='';
+    for(let i=0;i<n;i++) h+=`<select data-pl="${side}" data-idx="${i}"><option value="">―</option>
+      ${ps.map(p=>`<option value="${p.id}" ${p.id===arr[i]?'selected':''}>${p.name}</option>`).join('')}</select>`;
+    return h;
+  }
+  const mu=muById(cur.matchupId);
+  modal(`<h3>${isNew?'試合を追加':'試合を編集'}</h3>
+    <div class="field"><label>対抗戦</label>
+      ${isNew?`<select id="m-mu">${data.matchups.map(x=>`<option value="${x.id}" ${x.id===cur.matchupId?'selected':''}>${muLabel(x)}</option>`).join('')}</select>`
+        :`<div class="pill">${muLabel(mu)}</div>`}</div>
+    <div class="row2">
+      <div class="field"><label>種目</label><select id="m-cat">${Object.entries(CATS).map(([k,v])=>`<option value="${k}" ${cur.cat===k?'selected':''}>${v}</option>`).join('')}</select></div>
+      <div class="field"><label>番号</label><input type="number" id="m-no" min="1" value="${cur.no}"></div></div>
+    <div class="field"><label>区分</label><select id="m-gender">
+      <option value="M" ${cur.gender==='M'?'selected':''}>男子</option><option value="F" ${cur.gender==='F'?'selected':''}>女子</option><option value="X" ${cur.gender==='X'?'selected':''}>混合</option></select></div>
+    <div class="field"><label style="color:${mu?teamColor(mu.aId):''}">${mu?tName(mu.aId):'A側'}</label><div id="side-A" class="row2">${picker('A')}</div></div>
+    <div class="field"><label style="color:${mu?teamColor(mu.bId):''}">${mu?tName(mu.bId):'B側'}</label><div id="side-B" class="row2">${picker('B')}</div></div>
+    <div class="modal-actions">
+      ${!isNew?`<button class="btn ghost danger" data-act="del-match" data-id="${m.id}" style="margin-right:auto">削除</button>`:''}
+      <button class="btn ghost" data-act="cancel">キャンセル</button>
+      <button class="btn primary" data-act="save-match" data-id="${m?m.id:''}">保存</button></div>`);
+  function refresh(){ collectSidesFromModal(); cur.sideA=window._sa||[]; cur.sideB=window._sb||[];
+    cur.cat=document.getElementById('m-cat').value; cur.gender=document.getElementById('m-gender').value;
+    if(document.getElementById('m-mu')){ cur.matchupId=document.getElementById('m-mu').value; cur.sideA=[]; cur.sideB=[]; }
+    document.getElementById('side-A').innerHTML=picker('A'); document.getElementById('side-B').innerHTML=picker('B');
+    // ラベル色も更新
+    const mu2=muById(cur.matchupId);
+    document.querySelector('#side-A').previousElementSibling.style.color=mu2?teamColor(mu2.aId):'';
+    document.querySelector('#side-A').previousElementSibling.textContent=mu2?tName(mu2.aId):'A側';
+    document.querySelector('#side-B').previousElementSibling.style.color=mu2?teamColor(mu2.bId):'';
+    document.querySelector('#side-B').previousElementSibling.textContent=mu2?tName(mu2.bId):'B側';
+  }
+  document.getElementById('m-cat').addEventListener('change',refresh);
+  if(document.getElementById('m-mu')) document.getElementById('m-mu').addEventListener('change',refresh);
+}
+function collectSidesFromModal(){ const get=side=>Array.from(document.querySelectorAll(`#modal-root [data-pl="${side}"]`)).map(s=>s.value).filter(Boolean);
+  window._sa=get('A'); window._sb=get('B'); }
+
+function openEditPlayer(id,teamId){
+  const p=id?data.players.find(x=>x.id===id):null, isNew=!p, cur=p||{name:'',gender:'M',teamId};
+  modal(`<h3>${isNew?'選手を追加':'選手を編集'}（${tName(cur.teamId)}）</h3>
+    <div class="field"><label>名前</label><input type="text" id="p-name" value="${cur.name}"></div>
+    <div class="field"><label>性別</label><select id="p-gender"><option value="M" ${cur.gender==='M'?'selected':''}>男</option><option value="F" ${cur.gender==='F'?'selected':''}>女</option></select></div>
+    <div class="modal-actions">
+      ${!isNew?`<button class="btn ghost danger" data-act="del-player" data-id="${p.id}" style="margin-right:auto">削除</button>`:''}
+      <button class="btn ghost" data-act="cancel">キャンセル</button>
+      <button class="btn primary" data-act="save-player" data-id="${p?p.id:''}" data-team="${cur.teamId}">保存</button></div>`);
+}
+
+/* ============================ イベント ============================ */
+document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); view=b.dataset.view; render(); }));
+document.getElementById('importBtn').addEventListener('click', openImport);
+
+function bindView(){
+  const app=document.getElementById('app');
+  app.querySelectorAll('[data-act]').forEach(el=>el.addEventListener('click',handleAct));
+  app.querySelectorAll('[data-filter]').forEach(el=>el.addEventListener('click',()=>{ listFilter=el.dataset.filter; render(); }));
+  app.querySelectorAll('[data-mu]').forEach(el=>el.addEventListener('click',()=>{ curMu=el.dataset.mu; render(); }));
+  app.querySelectorAll('[data-listmu]').forEach(el=>el.addEventListener('click',()=>{ listMu=el.dataset.listmu; render(); }));
+  const imp=document.getElementById('save-import');
+  if(imp) imp.addEventListener('change',async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    try{
+      const obj=JSON.parse(await f.text());
+      const entry = (obj.payload && obj.payload.teams) ? obj
+        : (obj.teams ? {name:obj.title||f.name.replace(/\.json$/i,''),payload:{teams:obj.teams,players:obj.players||[],matchups:obj.matchups||[],matches:obj.matches||[],courtCount:obj.courtCount||4,title:obj.title||''}} : null);
+      if(!entry){ toast('対応していないファイル形式です'); return; }
+      const arr=loadSaves(); arr.push({id:uid(),name:entry.name||'読込データ',savedAt:new Date().toISOString(),payload:entry.payload});
+      writeSaves(arr); render(); toast('保存データに追加しました');
+    }catch(err){ toast('読み込み失敗: '+(err.message||err)); }
+  });
+  const prov=document.getElementById('ai-provider');
+  if(prov) prov.addEventListener('change',()=>{
+    const help={gemini:'無料枠あり。<a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> でキー取得。',
+      claude:'有料。<a href="https://console.anthropic.com/settings/keys" target="_blank">Anthropic Console</a>。',openai:'有料。<a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a>。'};
+    const def={gemini:'gemini-2.5-flash',claude:'claude-opus-4-8',openai:'gpt-4o'};
+    document.getElementById('ai-help').innerHTML=help[prov.value]; document.getElementById('ai-model').value=def[prov.value];
+  });
+}
+document.getElementById('modal-root').addEventListener('click',e=>{ const el=e.target.closest('[data-act]'); if(el) handleAct.call(el,e); });
+
+function handleAct(e){
+  const act=this.dataset.act, id=this.dataset.id;
+  switch(act){
+    case 'open-assign': openAssign(id); break;
+    case 'do-assign': { const m=data.matches.find(x=>x.id===id); m.court=+document.getElementById('assign-court').value; m.status='live'; closeModal(); render(); break; }
+    case 'finish': openFinish(id); break;
+    case 'do-finish': { const m=data.matches.find(x=>x.id===id); const a=document.getElementById('fa').value,b=document.getElementById('fb').value;
+      m.scoreA=a===''?null:+a; m.scoreB=b===''?null:+b; m.status='done'; m.court=null; closeModal(); render(); break; }
+    case 'add': openEditMatch(null); break;
+    case 'edit': openEditMatch(id); break;
+    case 'save-match': { collectSidesFromModal();
+      const muSel=document.getElementById('m-mu');
+      const payload={ matchupId: muSel?muSel.value:data.matches.find(x=>x.id===id).matchupId,
+        cat:document.getElementById('m-cat').value, no:+document.getElementById('m-no').value||1,
+        gender:document.getElementById('m-gender').value, sideA:window._sa||[], sideB:window._sb||[] };
+      if(id) Object.assign(data.matches.find(x=>x.id===id),payload);
+      else data.matches.push({id:uid(),...payload,order:data.matches.length,court:null,status:'pending',scoreA:null,scoreB:null});
+      closeModal(); render(); break; }
+    case 'del-match': if(confirm('この試合を削除しますか？')){ data.matches=data.matches.filter(x=>x.id!==id); closeModal(); render(); } break;
+    case 'add-player': openEditPlayer(null,this.dataset.team); break;
+    case 'edit-player': openEditPlayer(id); break;
+    case 'save-player': { const payload={name:document.getElementById('p-name').value.trim(),gender:document.getElementById('p-gender').value};
+      if(!payload.name){ toast('名前を入力してください'); return; }
+      if(id) Object.assign(data.players.find(x=>x.id===id),payload);
+      else data.players.push({id:uid(),teamId:this.dataset.team,...payload});
+      closeModal(); render(); break; }
+    case 'del-player': if(confirm('この選手を削除しますか？（試合の出場者からも外れます）')){
+      data.players=data.players.filter(x=>x.id!==id);
+      data.matches.forEach(m=>{m.sideA=m.sideA.filter(x=>x!==id);m.sideB=m.sideB.filter(x=>x!==id);}); closeModal(); render(); } break;
+    case 'save-basic': { data.title=document.getElementById('set-title').value;
+      data.courtCount=Math.max(1,Math.min(16,+document.getElementById('set-courts').value||4)); render(); toast('保存しました'); break; }
+    case 'save-teams': { document.querySelectorAll('[data-team-name]').forEach(inp=>{ const t=tById(inp.dataset.teamName); if(t) t.name=inp.value.trim()||t.name; });
+      syncMatchups(); render(); toast('保存しました'); break; }
+    case 'add-team': { data.teams.push({id:uid(),name:'チーム'+(data.teams.length+1)}); syncMatchups(); render(); break; }
+    case 'del-team': if(confirm('このチームを削除しますか？関連する対抗戦・試合も消えます。')){
+      data.teams=data.teams.filter(t=>t.id!==id); data.players=data.players.filter(p=>p.teamId!==id);
+      syncMatchups(); render(); } break;
+    case 'save-ai': { data.ai.provider=document.getElementById('ai-provider').value; data.ai.key=document.getElementById('ai-key').value.trim();
+      data.ai.model=document.getElementById('ai-model').value.trim(); save(); toast('保存しました'); break; }
+    case 'reset-status': if(confirm('全試合を「未」に戻しますか？スコアも消えます。')){ data.matches.forEach(m=>{m.status='pending';m.court=null;m.scoreA=null;m.scoreB=null;}); render(); } break;
+    case 'save-new': { const def=(data.title||'大会')+' '+fmtDate(new Date().toISOString());
+      promptModal('保存名を入力', def, name=>{ const arr=loadSaves();
+        arr.push({id:uid(),name:(name.trim()||def),savedAt:new Date().toISOString(),payload:snapshot()});
+        writeSaves(arr); render(); toast('保存しました'); }); break; }
+    case 'confirm-ok': { const cb=_confirmCb; _confirmCb=null; closeModal(); if(cb) cb(); break; }
+    case 'prompt-ok': { const cb=_promptCb; _promptCb=null; const v=document.getElementById('pm-input').value; closeModal(); if(cb) cb(v); break; }
+    case 'load-save': { const s=loadSaves().find(x=>x.id===id); if(!s) return;
+      confirmModal(`「${s.name}」を読み込みます。現在の表示中データは置き換わります（保存済みデータは消えません）。`, ()=>{
+        applySnapshot(s.payload); curMu='__all'; view='board';
+        document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x.dataset.view==='board')); render(); toast('読み込みました'); }); break; }
+    case 'overwrite-save': { const arr=loadSaves(); const s=arr.find(x=>x.id===id); if(!s) return;
+      confirmModal(`「${s.name}」を現在のデータで上書きしますか？`, ()=>{
+        s.payload=snapshot(); s.savedAt=new Date().toISOString(); writeSaves(arr); render(); toast('上書きしました'); }); break; }
+    case 'rename-save': { const s=loadSaves().find(x=>x.id===id); if(!s) return;
+      promptModal('新しい名前', s.name, name=>{ const arr=loadSaves(); const t=arr.find(x=>x.id===id); if(t){ t.name=name.trim()||t.name; writeSaves(arr); render(); } }); break; }
+    case 'del-save': confirmModal('この保存データを削除しますか？', ()=>{ writeSaves(loadSaves().filter(x=>x.id!==id)); render(); toast('削除しました'); }); break;
+    case 'export-save': { const s=loadSaves().find(x=>x.id===id); if(!s) return;
+      const blob=new Blob([JSON.stringify(s,null,2)],{type:'application/json'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+      a.download=(s.name||'taikousen').replace(/[\\/:*?"<>|]/g,'_')+'.json'; a.click(); URL.revokeObjectURL(a.href); break; }
+    case 'import-file': document.getElementById('save-import').click(); break;
+    case 'open-import': openImport(); break;
+    case 'load-sample': { const ai=data.ai; data=sampleData(); data.ai=ai; curMu='__all'; render(); break; }
+    case 'add-matchup': { const a=document.getElementById('mu-a').value, b=document.getElementById('mu-b').value;
+      if(!a||!b||a===b){ toast('異なる2チームを選んでください'); return; } ensureMatchup(a,b); syncMatchups(); render(); break; }
+    case 'reset-all': if(confirm('すべての大会データ（チーム・対抗戦・試合）を消去します。よろしいですか？')){ const ai=data.ai; data=defaultData(); data.ai=ai; curMu='__all'; render(); } break;
+    case 'go-settings': closeModal(); view='settings'; document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x.dataset.view==='settings')); render(); break;
+    case 'apply-import': applyExtraction(); break;
+    case 'cancel': closeModal(); break;
+  }
+}
+
+/* ==================== 写真から取り込み（AI画像認識） ==================== */
+let _imgs=[], _built=null;
+const EXTRACT_PROMPT=`あなたはテニスの対抗戦（2チームの団体戦）の手書き対戦表を読み取るアシスタントです。
+アップロードされた画像（複数枚の場合あり）から、写っている対抗戦の情報をすべて抽出し、JSONのみを返してください。
+チーム数や対抗戦の数は決まっていません。画像に写っているものだけを抽出してください。
+規則:
+- 各シート上部のタイトル（例「あじさい vs たんぽぽ」）が、その対抗戦の対戦カード（2チーム名）。左側を teams[0]、右側を teams[1]。
+- 複数の画像が「同じ2チームの対戦（同じタイトル）」なら、同じ対抗戦の別ページ（例:男子ページと女子ページ）なので1つの対抗戦にまとめる。
+- 「異なる対戦カード」（タイトルのチームの組合せが違う）なら、別々の対抗戦として分ける。1枚の画像内に複数のカードがある場合も分ける。
+- 「男子」セクションは gender="M"、「女子」は gender="F"。Mで始まる行(M1等)はミックスダブルスで gender="X"。
+- S=シングルス(cat="S",各サイド1名)。D=ダブルス(cat="D",各サイド2名)。「-」の左が sideA(teams[0])、右が sideB(teams[1])。
+- 名前は書かれているとおり（ひらがな等）。①等の記号も残す。読めない字は推測でよい。noは行番号。
+出力JSON（このキー構造を厳守。説明やコードブロックは不要、JSONのみ）:
+{"matchups":[{"teams":["左チーム名","右チーム名"],"matches":[{"cat":"S","no":1,"gender":"M","sideA":["名前"],"sideB":["名前"]}]}]}`;
+
+async function loadImageScaled(file){
+  const dataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
+  const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=dataUrl;});
+  const max=1600; let {width:w,height:h}=img;
+  if(Math.max(w,h)>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+  const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
+  const jpeg=c.toDataURL('image/jpeg',0.85); return {b64:jpeg.split(',')[1],mime:'image/jpeg',preview:jpeg};
+}
+function openImport(){
+  if(!data.ai.key){ modal(`<h3>📷 写真から取り込み</h3><div class="banner">先に「設定」画面で AI（Gemini無料枠など）の APIキーを登録してください。</div>
+    <div class="modal-actions"><button class="btn ghost" data-act="cancel">閉じる</button><button class="btn primary" data-act="go-settings">設定を開く</button></div>`); return; }
+  _imgs=[];
+  modal(`<h3>📷 写真から取り込み</h3>
+    <p style="font-size:13px;color:var(--muted);margin-top:0">手書きの対戦表を撮影 or 選択（複数枚OK・同じ対抗戦のページをまとめて読み取り）。抽出したチーム名に該当する対抗戦へ取り込みます（なければ新規作成）。</p>
+    <input type="file" id="imp-file" accept="image/*" capture="environment" multiple style="margin-bottom:12px">
+    <div id="imp-preview" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div id="imp-status"></div>
+    <div class="modal-actions"><button class="btn ghost" data-act="cancel">キャンセル</button><button class="btn primary" id="imp-run" disabled>解析する</button></div>`);
+  document.getElementById('imp-file').addEventListener('change',async e=>{
+    const files=Array.from(e.target.files); if(!files.length) return;
+    const st=document.getElementById('imp-status'); st.innerHTML='<div class="empty-note">画像を準備中…</div>';
+    try{ for(const f of files){ const r=await loadImageScaled(f); _imgs.push(r); } renderImpThumbs(); st.innerHTML=''; }
+    catch(err){ st.innerHTML='<div class="banner danger">画像の読み込みに失敗しました</div>'; }
+  });
+  document.getElementById('imp-run').addEventListener('click',runExtraction);
+}
+function renderImpThumbs(){
+  const box=document.getElementById('imp-preview'); if(!box) return;
+  box.innerHTML=_imgs.map((im,i)=>`<div style="position:relative"><img src="${im.preview}" style="height:90px;border-radius:8px;border:1px solid var(--line)">
+    <button data-rm="${i}" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:var(--busy);color:#fff;font-weight:700;cursor:pointer;line-height:1">×</button></div>`).join('');
+  const run=document.getElementById('imp-run'); run.textContent=_imgs.length>1?`解析する（${_imgs.length}枚）`:'解析する'; run.disabled=_imgs.length===0;
+  box.querySelectorAll('[data-rm]').forEach(b=>b.addEventListener('click',()=>{ _imgs.splice(+b.dataset.rm,1); renderImpThumbs(); }));
+}
+async function runExtraction(){
+  const st=document.getElementById('imp-status'); document.getElementById('imp-run').disabled=true;
+  st.innerHTML=`<div class="empty-note">🤖 AIが読み取り中…（${_imgs.length>1?_imgs.length+'枚・':''}10〜30秒ほど）</div>`;
+  try{ const ex=await callVision(data.ai,_imgs); _built=buildFromExtraction(ex); showExtractionReview(); }
+  catch(err){ st.innerHTML=`<div class="banner danger">読み取りに失敗しました：${(err&&err.message)||err}<br>APIキー・モデル名・通信を確認してください。</div>`; document.getElementById('imp-run').disabled=false; }
+}
+function parseJSONLoose(text){ let t=(text||'').trim(); t=t.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+  const s=t.indexOf('{'),e=t.lastIndexOf('}'); if(s>=0&&e>=0) t=t.slice(s,e+1); return JSON.parse(t); }
+async function callVision(ai,imgs){
+  if(ai.provider==='gemini'){
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/${ai.model}:generateContent?key=${encodeURIComponent(ai.key)}`;
+    const parts=[{text:EXTRACT_PROMPT},...imgs.map(im=>({inline_data:{mime_type:im.mime,data:im.b64}}))];
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{responseMimeType:'application/json',temperature:0}})});
+    if(!r.ok) throw new Error('Gemini '+r.status+' '+(await r.text()).slice(0,200));
+    const j=await r.json(); return parseJSONLoose(j.candidates[0].content.parts[0].text);
+  }
+  if(ai.provider==='claude'){
+    const content=[...imgs.map(im=>({type:'image',source:{type:'base64',media_type:im.mime,data:im.b64}})),{type:'text',text:EXTRACT_PROMPT}];
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':ai.key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:ai.model,max_tokens:4096,messages:[{role:'user',content}]})});
+    if(!r.ok) throw new Error('Claude '+r.status+' '+(await r.text()).slice(0,200));
+    const j=await r.json(); return parseJSONLoose(j.content[0].text);
+  }
+  const content=[{type:'text',text:EXTRACT_PROMPT},...imgs.map(im=>({type:'image_url',image_url:{url:`data:${im.mime};base64,${im.b64}`}}))];
+  const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ai.key},
+    body:JSON.stringify({model:ai.model,response_format:{type:'json_object'},messages:[{role:'user',content}]})});
+  if(!r.ok) throw new Error('OpenAI '+r.status+' '+(await r.text()).slice(0,200));
+  const j=await r.json(); return parseJSONLoose(j.choices[0].message.content);
+}
+// 抽出JSONを [{aName,bName,matches:[{cat,no,gender,aNames[],bNames[]}]}] に整形（複数対抗戦対応）
+function normMatch(m,i){ return {
+  cat:['S','D','M'].includes(m.cat)?m.cat:'D', no:+m.no||(i+1),
+  gender:['M','F','X'].includes(m.gender)?m.gender:'M',
+  aNames:(m.sideA||[]).map(n=>(n||'').toString().trim()).filter(Boolean),
+  bNames:(m.sideB||[]).map(n=>(n||'').toString().trim()).filter(Boolean) }; }
+function buildFromExtraction(ex){
+  // 新形式 {matchups:[...]}。旧形式 {teams,matches} もフォールバックで1対抗戦として扱う。
+  let mus = ex.matchups;
+  if(!Array.isArray(mus)) mus = [{teams:ex.teams,matches:ex.matches}];
+  return mus.filter(Boolean).map(mu=>({
+    aName:((mu.teams&&mu.teams[0])||'チームA').toString().trim(),
+    bName:((mu.teams&&mu.teams[1])||'チームB').toString().trim(),
+    matches:(mu.matches||[]).map(normMatch) }));
+}
+function findTeamByName(name){ const n=(name||'').trim(); return data.teams.find(t=>t.name.trim()===n) || data.teams.find(t=>t.name.trim().toLowerCase()===n.toLowerCase()); }
+function lab(m){const g=m.gender==='M'?'男子':m.gender==='F'?'女子':'混合';return m.cat==='M'?'ミックス'+m.no:g+(m.cat==='S'?'S':'D')+m.no;}
+function showExtractionReview(){
+  const list=_built;
+  // 新規作成されるチーム名を集計
+  const knownNames=new Set(data.teams.map(t=>t.name.trim()));
+  const seen=new Set(), newTeams=[];
+  list.forEach(b=>[b.aName,b.bName].forEach(n=>{ const k=n.trim(); if(!knownNames.has(k)&&!seen.has(k)){seen.add(k);newTeams.push(n);} }));
+  const blocks=list.map(b=>{
+    const rows=b.matches.map(m=>`<tr><td><span class="mc-tag ${m.cat}">${lab(m)}</span></td><td>${m.aNames.join('・')}</td><td>${m.bNames.join('・')}</td></tr>`).join('');
+    return `<div style="margin-bottom:14px"><div class="pool-title">${b.aName} vs ${b.bName}　<span class="pill">${b.matches.length}試合</span></div>
+      <div style="max-height:32vh;overflow:auto"><table><thead><tr><th>種目</th><th>${b.aName}</th><th>${b.bName}</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan=3 class="empty-note">試合なし</td></tr>'}</tbody></table></div></div>`;
+  }).join('');
+  modal(`<h3>読み取り結果の確認</h3>
+    <div class="banner">${list.length}件の対抗戦を検出。${newTeams.length?`新しいチーム（${newTeams.join('・')}）を作成します。`:''}
+    <br>手書きのため誤読がある場合があります。取り込み後に「試合一覧」「選手」で修正できます。</div>
+    ${blocks||'<div class="empty-note">対抗戦を検出できませんでした</div>'}
+    <div class="modal-actions"><button class="btn ghost" data-act="cancel">やり直す</button>
+      <button class="btn done" data-act="apply-import">取り込む（${list.length}対抗戦）</button></div>`);
+}
+function applyExtraction(){
+  const reg={};
+  function getTeam(name){ let t=findTeamByName(name); if(!t){ t={id:uid(),name:(name||'チーム').trim()}; data.teams.push(t); } return t; }
+  function getP(teamId,name,gender){ const key=teamId+'|'+name; if(reg[key])return reg[key];
+    let p=data.players.find(x=>x.teamId===teamId&&x.name===name);
+    if(!p){ p={id:uid(),teamId,name,gender}; data.players.push(p); } else if(p.gender==='X'&&gender!=='X') p.gender=gender;
+    reg[key]=p.id; return p.id; }
+  let lastMid=null;
+  _built.forEach(b=>{
+    if(!b.matches.length && !findTeamByName(b.aName) && !findTeamByName(b.bName)) {/* それでも作る */}
+    const ta=getTeam(b.aName), tb=getTeam(b.bName);
+    const mid=ensureMatchup(ta.id,tb.id); const mu=muById(mid); const aIsFirst=mu.aId===ta.id;
+    data.matches=data.matches.filter(m=>m.matchupId!==mid); // この対抗戦は入れ替え
+    b.matches.forEach((m,i)=>{
+      const taIds=m.aNames.map(n=>getP(ta.id,n,m.gender)), tbIds=m.bNames.map(n=>getP(tb.id,n,m.gender));
+      data.matches.push({id:uid(),matchupId:mid,cat:m.cat,no:m.no,gender:m.gender,order:i,
+        sideA:aIsFirst?taIds:tbIds, sideB:aIsFirst?tbIds:taIds,
+        court:null,status:'pending',scoreA:null,scoreB:null});
+    });
+    lastMid=mid;
+  });
+  syncMatchups();
+  _built=null; closeModal();
+  view='board'; curMu = _builtMulti()?'__all':(lastMid||'__all');
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x.dataset.view==='board'));
+  render();
+}
+function _builtMulti(){ return data.matchups.length>1; }
+
+render();
+</script>
+</body>
+</html>
