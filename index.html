@@ -263,6 +263,25 @@ function load(){
 }
 function save(){ localStorage.setItem(LS_KEY, JSON.stringify(data)); }
 
+/* 取り込みアーカイブ（写真＋読み取り結果、IndexedDBに保存） */
+const IDB_NAME='tennis_archive', IDB_STORE='imports';
+function idb(){ return new Promise((res,rej)=>{
+  const q=indexedDB.open(IDB_NAME,1);
+  q.onupgradeneeded=()=>q.result.createObjectStore(IDB_STORE,{keyPath:'id'});
+  q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }); }
+async function archiveAdd(entry){ const db=await idb();
+  return new Promise((res,rej)=>{ const tx=db.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).put(entry); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+async function archiveList(){ const db=await idb();
+  return new Promise((res,rej)=>{ const q=db.transaction(IDB_STORE).objectStore(IDB_STORE).getAll();
+    q.onsuccess=()=>res(q.result||[]); q.onerror=()=>rej(q.error); }); }
+async function archiveGet(id){ const db=await idb();
+  return new Promise((res,rej)=>{ const q=db.transaction(IDB_STORE).objectStore(IDB_STORE).get(id);
+    q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }); }
+async function archiveDel(id){ const db=await idb();
+  return new Promise((res,rej)=>{ const tx=db.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).delete(id); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+
 /* 保存スロット（名前付きスナップショット） */
 const LS_SAVES='tennis_taikousen_saves_v2';
 function loadSaves(){ try{ return JSON.parse(localStorage.getItem(LS_SAVES))||[]; }catch(e){ return []; } }
@@ -320,7 +339,7 @@ function render(){
   if(view==='board') app.innerHTML=renderBoard();
   else if(view==='list') app.innerHTML=renderList();
   else if(view==='players') app.innerHTML=renderPlayers();
-  else if(view==='saves') app.innerHTML=renderSaves();
+  else if(view==='saves'){ app.innerHTML=renderSaves(); fillArchiveList(); }
   else if(view==='settings') app.innerHTML=renderSettings();
   bindView(); save();
 }
@@ -525,7 +544,31 @@ function renderSaves(){
       <input type="file" id="save-import" accept="application/json,.json" style="display:none">
     </div>
     <table><thead><tr><th>名前</th><th>保存日時</th><th>内容</th><th></th></tr></thead>
-      <tbody>${rows||'<tr><td colspan=4 class="empty-note">保存データはありません</td></tr>'}</tbody></table>`;
+      <tbody>${rows||'<tr><td colspan=4 class="empty-note">保存データはありません</td></tr>'}</tbody></table>
+    <div class="pool-title" style="margin:24px 0 10px">📷 取り込みアーカイブ</div>
+    <div class="banner">写真から取り込むたびに、写真と読み取り結果がここに自動で残ります。タップで詳細を表示。</div>
+    <div id="archive-list" class="pool-grid"><div class="empty-note">読み込み中…</div></div>`;
+}
+function fillArchiveList(){
+  const box=document.getElementById('archive-list'); if(!box) return;
+  archiveList().then(list=>{
+    if(!document.getElementById('archive-list')) return;
+    list.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));
+    document.getElementById('archive-list').innerHTML = list.map(e=>{
+      const mus=(e.built||[]).map(b=>`${b.aName} vs ${b.bName}`).join('、');
+      const nMatch=(e.built||[]).reduce((s,b)=>s+b.matches.length,0);
+      return `<div class="matchcard" data-act="open-archive" data-id="${e.id}">
+        <div style="display:flex;gap:6px;margin-bottom:8px;overflow:hidden;border-radius:8px">
+          ${e.images.slice(0,3).map(src=>`<img src="${src}" style="height:64px;width:64px;object-fit:cover;border-radius:8px;flex:none">`).join('')}
+          ${e.images.length>3?`<span class="pill" style="align-self:center">+${e.images.length-3}</span>`:''}</div>
+        <div class="mc-mu">${fmtDate(e.savedAt)}</div>
+        <div style="font-weight:800;font-size:13.5px">${mus||'(内容なし)'}</div>
+        <div style="font-size:12px;color:var(--muted)">${e.images.length}枚・${nMatch}試合</div>
+      </div>`;
+    }).join('') || '<div class="empty-note">まだアーカイブはありません。写真から取り込むと自動で残ります。</div>';
+    // 非同期挿入なのでここでクリックをバインド
+    document.getElementById('archive-list').querySelectorAll('[data-act]').forEach(el=>el.addEventListener('click',handleAct));
+  }).catch(()=>{ box.innerHTML='<div class="empty-note">アーカイブを読み込めませんでした</div>'; });
 }
 
 /* ============================ モーダル ============================ */
@@ -744,6 +787,27 @@ function handleAct(e){
       const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
       a.download=(s.name||'taikousen').replace(/[\\/:*?"<>|]/g,'_')+'.json'; a.click(); URL.revokeObjectURL(a.href); break; }
     case 'import-file': document.getElementById('save-import').click(); break;
+    case 'open-archive': { archiveGet(id).then(e=>{ if(!e) return;
+      const blocks=(e.built||[]).map(b=>{
+        const rows=b.matches.map(m=>`<tr><td><span class="mc-tag ${m.cat}">${lab(m)}</span></td>
+          <td>${m.aNames.join('・')}</td><td>${m.bNames.join('・')}</td></tr>`).join('');
+        return `<div style="margin-bottom:12px"><div class="pool-title">${b.aName} vs ${b.bName}</div>
+          <table><thead><tr><th>種目</th><th>${b.aName}</th><th>${b.bName}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      }).join('');
+      modal(`<h3>📷 ${fmtDate(e.savedAt)} の取り込み</h3>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+          ${e.images.map(src=>`<img src="${src}" style="width:100%;border-radius:12px;border:1px solid var(--line)">`).join('')}</div>
+        ${blocks||'<div class="empty-note">読み取り結果なし</div>'}
+        <div class="modal-actions">
+          <button class="btn ghost danger" data-act="del-archive" data-id="${e.id}" style="margin-right:auto">削除</button>
+          <button class="btn ghost" data-act="cancel">閉じる</button>
+          <button class="btn primary" data-act="reapply-archive" data-id="${e.id}">この内容を再取り込み</button></div>`);
+      }); break; }
+    case 'del-archive': confirmModal('このアーカイブを削除しますか？（写真と読み取り記録が消えます）', ()=>{
+      archiveDel(id).then(()=>{ render(); toast('削除しました'); }); }); break;
+    case 'reapply-archive': { archiveGet(id).then(e=>{ if(!e||!e.built) return;
+      _built=JSON.parse(JSON.stringify(e.built)); _fromArchive=true; _imgs=[];
+      showExtractionReview(); }); break; }
     case 'open-import': openImport(); break;
     case 'load-sample': { const ai=data.ai; data=sampleData(); data.ai=ai; curMu='__all'; render(); break; }
     case 'add-matchup': { const a=document.getElementById('mu-a').value, b=document.getElementById('mu-b').value;
@@ -868,7 +932,15 @@ function showExtractionReview(){
     <div class="modal-actions"><button class="btn ghost" data-act="cancel">やり直す</button>
       <button class="btn done" data-act="apply-import">取り込む（${list.length}対抗戦）</button></div>`);
 }
+let _fromArchive=false;
 function applyExtraction(){
+  // 写真と読み取り結果をアーカイブに自動保存（アーカイブからの再取り込み時は除く）
+  if(!_fromArchive && _imgs.length){
+    archiveAdd({ id:uid(), savedAt:new Date().toISOString(),
+      images:_imgs.map(im=>im.preview),
+      built:JSON.parse(JSON.stringify(_built)) }).catch(()=>{});
+  }
+  _fromArchive=false;
   const reg={};
   function getTeam(name){ let t=findTeamByName(name); if(!t){ t={id:uid(),name:(name||'チーム').trim()}; data.teams.push(t); } return t; }
   function getP(teamId,name,gender){ const key=teamId+'|'+name; if(reg[key])return reg[key];
