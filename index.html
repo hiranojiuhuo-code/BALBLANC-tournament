@@ -255,12 +255,31 @@ function muId(a,b){ return a<b?a+'__'+b:b+'__'+a; }
 
 let data = load();
 function load(){
+  let d=null;
   try{
     const raw=localStorage.getItem(LS_KEY);
-    if(raw){ const d=JSON.parse(raw); if(!d.ai)d.ai={provider:'gemini',key:'',model:'gemini-2.5-flash'}; return d; }
+    if(raw){ d=JSON.parse(raw); if(!d.ai)d.ai={provider:'gemini',key:'',model:'gemini-2.5-flash'}; }
   }catch(e){}
-  return defaultData();
+  if(!d) d=defaultData();
+  // 旧バージョン(v1)からAPIキーを引き継ぐ
+  if(!d.ai.key){ try{ const v1=JSON.parse(localStorage.getItem('tennis_taikousen_v1'));
+    if(v1&&v1.ai&&v1.ai.key) d.ai=v1.ai; }catch(e){} }
+  return d;
 }
+// URLハッシュ #k=APIキー&p=プロバイダ&m=モデル でキーを受け取る（設定リンク機能）
+(function(){
+  if(!location.hash.startsWith('#k=')) return;
+  try{
+    const q=new URLSearchParams(location.hash.slice(1));
+    const k=q.get('k'); if(!k) return;
+    data.ai.key=k;
+    if(q.get('p')) data.ai.provider=q.get('p');
+    if(q.get('m')) data.ai.model=q.get('m');
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+    history.replaceState(null,'',location.pathname+location.search); // キーをURLから消す
+    setTimeout(()=>{ if(typeof toast==='function') toast('APIキーを設定しました'); },400);
+  }catch(e){}
+})();
 function save(){ localStorage.setItem(LS_KEY, JSON.stringify(data)); }
 
 /* 取り込みアーカイブ（写真＋読み取り結果、IndexedDBに保存） */
@@ -514,6 +533,10 @@ function renderSettings(){
     <div class="field"><label>モデル名</label><input type="text" id="ai-model" value="${ai.model||''}"></div>
     <div class="banner" id="ai-help" style="margin-bottom:8px">${provHelp[ai.provider]}</div>
     <div class="modal-actions"><button class="btn primary" data-act="save-ai">保存</button></div>
+    ${ai.key?`<hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+    <label style="font-size:12px;font-weight:700;color:var(--muted)">他の端末への引き継ぎ</label>
+    <p style="font-size:12px;color:var(--muted);margin:6px 0 10px">下のボタンでコピーしたリンクを他の端末（スマホ等）で開くと、APIキーが自動で設定されます。<b>キーが含まれるので、運営メンバー以外に送らないでください。</b></p>
+    <button class="btn ghost" data-act="copy-setup-link">🔗 設定リンクをコピー</button>`:''}
   </div>
   <div class="card" style="max-width:480px;margin-top:16px">
     <button class="btn ghost" data-act="reset-status">全試合を「未」に戻す（進行リセット）</button>
@@ -764,7 +787,11 @@ function handleAct(e){
       data.teams=data.teams.filter(t=>t.id!==id); data.players=data.players.filter(p=>p.teamId!==id);
       syncMatchups(); render(); } break;
     case 'save-ai': { data.ai.provider=document.getElementById('ai-provider').value; data.ai.key=document.getElementById('ai-key').value.trim();
-      data.ai.model=document.getElementById('ai-model').value.trim(); save(); toast('保存しました'); break; }
+      data.ai.model=document.getElementById('ai-model').value.trim(); save(); render(); toast('保存しました'); break; }
+    case 'copy-setup-link': { const u=location.origin+location.pathname+
+      '#k='+encodeURIComponent(data.ai.key)+'&p='+encodeURIComponent(data.ai.provider)+'&m='+encodeURIComponent(data.ai.model);
+      (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('リンクをコピーしました'))
+        .catch(()=>{ promptModal('このリンクをコピーしてください', u, ()=>{}); }); break; }
     case 'reset-status': if(confirm('全試合を「未」に戻しますか？スコアも消えます。')){ data.matches.forEach(m=>{m.status='pending';m.court=null;m.scoreA=null;m.scoreB=null;}); render(); } break;
     case 'save-new': { const def=(data.title||'大会')+' '+fmtDate(new Date().toISOString());
       promptModal('保存名を入力', def, name=>{ const arr=loadSaves();
