@@ -1021,7 +1021,7 @@ function _builtMulti(){ return data.matchups.length>1; }
 
 /* ==================== パスコードゲート ==================== */
 // PASS_HASH は「運営パスコード」のSHA-256。平文はここには入れない。
-const PASS_HASH='44101bd7e008971009a5c8365210ced92bd3f3d3ded74f20ea70868dae51de69';
+const PASS_HASH='3386172f9f5f3a8b5a79c6e0a2892d26845d91ed0d4d006bc5f66fe78bbcc752';
 async function sha256hex(s){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
   return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
 (function(){
