@@ -146,6 +146,19 @@
   .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
   .mu-select{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
   .teamcards{display:flex;gap:18px;flex-wrap:wrap}
+  /* パスコードゲート */
+  #gate{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;
+    background:linear-gradient(160deg,var(--court-deep),var(--court) 70%,#35825e)}
+  .gate-box{background:#fff;border-radius:20px;padding:32px 26px;max-width:340px;width:100%;text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.4);border-top:5px solid var(--ball);animation:modal-in .25s ease-out}
+  .gate-box .ball-logo{width:56px;height:56px;margin:0 auto 14px}
+  .gate-box .ball-logo::before,.gate-box .ball-logo::after{width:56px;height:56px;border-width:3px}
+  .gate-box .ball-logo::before{left:-30px;top:-30px}.gate-box .ball-logo::after{right:-30px;bottom:-30px}
+  .gate-box h2{margin:0 0 4px;font-size:19px;color:var(--court-deep);font-family:'Outfit',sans-serif}
+  .gate-box p{margin:0 0 18px;font-size:13px;color:var(--muted)}
+  #gate-input{text-align:center;font-size:18px;letter-spacing:.15em;margin-bottom:12px}
+  #gate-btn{width:100%}
+  #gate-err{color:var(--busy);font-size:13px;font-weight:700;margin-top:10px;min-height:18px}
   /* ヘッダー上の取り込みボタンはボールイエローで目立たせる */
   #importBtn{background:linear-gradient(135deg,var(--ball),var(--ball-deep));color:var(--court-deep);
     box-shadow:0 2px 8px rgba(0,0,0,.25);border-radius:20px}
@@ -200,6 +213,16 @@
 </header>
 <main id="app"></main>
 <div id="modal-root"></div>
+<div id="gate">
+  <div class="gate-box">
+    <div class="ball-logo"></div>
+    <h2>対抗戦 進行管理</h2>
+    <p>運営パスコードを入力してください</p>
+    <input type="password" id="gate-input" inputmode="text" autocomplete="off" placeholder="パスコード">
+    <button class="btn primary" id="gate-btn">入る</button>
+    <div id="gate-err"></div>
+  </div>
+</div>
 
 <script>
 /* ============================ データ層 ============================ */
@@ -995,6 +1018,25 @@ function applyExtraction(){
   render();
 }
 function _builtMulti(){ return data.matchups.length>1; }
+
+/* ==================== パスコードゲート ==================== */
+// PASS_HASH は「運営パスコード」のSHA-256。平文はここには入れない。
+const PASS_HASH='44101bd7e008971009a5c8365210ced92bd3f3d3ded74f20ea70868dae51de69';
+async function sha256hex(s){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+(function(){
+  const gate=document.getElementById('gate');
+  if(localStorage.getItem('gate_ok')===PASS_HASH){ gate.remove(); return; }
+  const inp=document.getElementById('gate-input'), err=document.getElementById('gate-err');
+  async function tryUnlock(){
+    const h=await sha256hex(inp.value);
+    if(h===PASS_HASH){ localStorage.setItem('gate_ok',PASS_HASH); gate.remove(); }
+    else { err.textContent='パスコードが違います'; inp.value=''; inp.focus(); }
+  }
+  document.getElementById('gate-btn').addEventListener('click',tryUnlock);
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter') tryUnlock(); });
+  setTimeout(()=>inp.focus(),100);
+})();
 
 render();
 </script>
