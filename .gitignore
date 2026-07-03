@@ -1,0 +1,6 @@
+# 写真・個人情報は公開しない
+*.jpg
+*.jpeg
+*.png
+*.heic
+.DS_Store
