@@ -6,33 +6,55 @@
 <title>対抗戦 進行管理</title>
 <style>
   :root{
-    --bg:#f4f6f8; --panel:#fff; --line:#e2e6ea; --text:#1f2933; --muted:#7b8794;
-    --ready:#2fa84f; --readybg:#e9f7ee; --busy:#c92a2a; --busybg:#fdecea;
-    --live:#f59f00; --livebg:#fff6e0; --done:#94a3b8; --accent:#2f6df6;
+    --court:#2b6e4f; --court-deep:#1c4a35; --courtline:#e8f3ec;
+    --ball:#d8e34a; --ball-deep:#b9c531;
+    --bg:#eef1ea; --panel:#fff; --line:#dde4da; --text:#1d2b23; --muted:#6d7f74;
+    --ready:#2fa84f; --readybg:#e9f7ee; --busy:#c9372a; --busybg:#fdecea;
+    --live:#f59f00; --livebg:#fff6e0; --done:#94a3b8; --accent:#2b6e4f;
+    --shadow:0 1px 3px rgba(28,74,53,.08), 0 4px 14px rgba(28,74,53,.06);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
     background:var(--bg);color:var(--text);font-size:15px;line-height:1.5}
-  header{position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);
-    padding:8px 14px;display:flex;flex-direction:column;gap:8px}
-  .topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  h1{font-size:17px;margin:0;font-weight:700}
-  nav{display:flex;gap:4px;flex-wrap:wrap}
-  nav button{border:0;background:transparent;padding:8px 14px;border-radius:8px;font-size:14px;
-    color:var(--muted);cursor:pointer;font-weight:600}
-  nav button.active{background:var(--accent);color:#fff}
-  main{padding:14px;max-width:1200px;margin:0 auto}
-  .courts{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:20px}
-  .court{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;min-height:130px;
-    display:flex;flex-direction:column;gap:8px}
-  .court.live{border-color:var(--live);box-shadow:0 0 0 2px var(--livebg)}
-  .court-head{display:flex;justify-content:space-between;align-items:center}
-  .court-name{font-weight:700;font-size:15px}
-  .court-empty{color:var(--muted);font-size:13px;display:flex;align-items:center;justify-content:center;
-    flex:1;min-height:60px;border:1.5px dashed var(--line);border-radius:10px}
-  .matchcard{border-radius:10px;padding:10px;border:1px solid var(--line);background:#fff;cursor:pointer;
-    transition:.1s;position:relative}
-  .matchcard:active{transform:scale(.99)}
+  header{position:sticky;top:0;z-index:30;padding:0;display:flex;flex-direction:column;
+    background:linear-gradient(135deg,var(--court-deep) 0%,var(--court) 60%,#35825e 100%);
+    box-shadow:0 2px 12px rgba(28,74,53,.25)}
+  /* コートのライン風の白線 */
+  header::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:.14;
+    background:
+      linear-gradient(90deg,transparent calc(50% - 1px),#fff calc(50% - 1px),#fff calc(50% + 1px),transparent calc(50% + 1px)),
+      linear-gradient(0deg,transparent 0 6px,#fff 6px 8px,transparent 8px);}
+  .topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px 8px;position:relative}
+  h1{font-size:18px;margin:0;font-weight:800;color:#fff;letter-spacing:.02em;
+    display:flex;align-items:center;gap:8px;text-shadow:0 1px 2px rgba(0,0,0,.2)}
+  nav{display:flex;gap:2px;flex-wrap:wrap;padding:0 12px;position:relative}
+  nav button{border:0;background:transparent;padding:10px 16px 12px;font-size:14px;
+    color:rgba(255,255,255,.75);cursor:pointer;font-weight:700;position:relative;
+    border-radius:10px 10px 0 0;transition:color .15s}
+  nav button:hover{color:#fff}
+  nav button.active{background:var(--bg);color:var(--court-deep)}
+  nav button.active::after{content:'';position:absolute;top:8px;left:50%;transform:translateX(-50%);
+    width:26px;height:3px;border-radius:2px;background:var(--ball);top:auto;bottom:6px}
+  main{padding:16px 14px;max-width:1200px;margin:0 auto}
+  .courts{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:22px}
+  /* コートカード：ミニチュアのテニスコート */
+  .court{background:linear-gradient(160deg,#377a58,#2b6e4f);border:1px solid var(--court-deep);
+    border-radius:16px;padding:12px;min-height:130px;display:flex;flex-direction:column;gap:8px;
+    box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .court::before{content:'';position:absolute;inset:8px;border:1.5px solid rgba(255,255,255,.25);
+    border-radius:8px;pointer-events:none}
+  .court::after{content:'';position:absolute;top:8px;bottom:8px;left:50%;width:1.5px;
+    background:rgba(255,255,255,.22);pointer-events:none}
+  .court.live{box-shadow:0 0 0 3px var(--ball), var(--shadow)}
+  .court-head{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1}
+  .court-name{font-weight:800;font-size:15px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+  .court-empty{color:rgba(255,255,255,.75);font-size:13px;display:flex;align-items:center;justify-content:center;
+    flex:1;min-height:60px;border:1.5px dashed rgba(255,255,255,.4);border-radius:10px;position:relative;z-index:1}
+  .court .matchcard{position:relative;z-index:1}
+  .matchcard{border-radius:12px;padding:11px;border:1px solid var(--line);background:#fff;cursor:pointer;
+    transition:transform .1s, box-shadow .15s;position:relative;box-shadow:var(--shadow)}
+  .matchcard:hover{box-shadow:0 3px 8px rgba(28,74,53,.14), 0 8px 22px rgba(28,74,53,.10)}
+  .matchcard:active{transform:scale(.985)}
   .mc-mu{font-size:11px;color:var(--muted);font-weight:600;margin-bottom:3px}
   .mc-tag{font-size:11px;font-weight:700;color:#fff;background:var(--muted);border-radius:6px;
     padding:1px 7px;display:inline-block;margin-bottom:6px}
@@ -43,30 +65,41 @@
   .badge.ready{background:var(--readybg);color:var(--ready)}
   .badge.busy{background:var(--busybg);color:var(--busy)}
   .badge.live{background:var(--livebg);color:#b07400}
-  .pool-section{margin-bottom:18px}
-  .pool-title{font-weight:700;margin:0 0 8px;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .pool-section{margin-bottom:20px}
+  .pool-title{font-weight:800;margin:0 0 10px;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    color:var(--court-deep)}
   .pool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
-  .matchcard.ready{border-color:var(--ready);background:var(--readybg)}
-  .matchcard.busy{opacity:.7}
+  .matchcard.ready{border-color:var(--ready);background:linear-gradient(180deg,#fff, var(--readybg))}
+  .matchcard.ready::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:4px;
+    border-radius:0 4px 4px 0;background:var(--ready)}
+  .matchcard.busy{opacity:.72;filter:saturate(.7)}
   .mc-busyinfo{font-size:11px;color:var(--busy);margin-top:4px}
-  .btn{border:0;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer}
-  .btn.primary{background:var(--accent);color:#fff}
-  .btn.ghost{background:#eef1f4;color:var(--text)}
-  .btn.done{background:var(--ready);color:#fff}
+  .btn{border:0;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:800;cursor:pointer;
+    transition:transform .08s, filter .15s;letter-spacing:.01em}
+  .btn:hover{filter:brightness(1.06)}
+  .btn:active{transform:scale(.97)}
+  .btn.primary{background:var(--court);color:#fff;box-shadow:0 2px 6px rgba(43,110,79,.35)}
+  .btn.ghost{background:#e7ece5;color:var(--text)}
+  .btn.done{background:linear-gradient(135deg,var(--ball),var(--ball-deep));color:var(--court-deep);
+    box-shadow:0 2px 6px rgba(185,197,49,.4)}
   .btn.sm{padding:5px 10px;font-size:12px}
-  .court .btn{width:100%}
-  table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:12px;overflow:hidden}
-  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);font-size:13px}
-  th{background:#f0f3f6;font-size:12px;color:var(--muted);font-weight:700}
+  .court .btn{width:100%;position:relative;z-index:1}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:14px;overflow:hidden;
+    box-shadow:var(--shadow)}
+  th,td{padding:10px 11px;text-align:left;border-bottom:1px solid var(--line);font-size:13px}
+  th{background:var(--court);font-size:12px;color:#fff;font-weight:700;letter-spacing:.03em}
   tr:last-child td{border-bottom:0}
+  tbody tr:nth-child(even){background:#f7faf6}
   .filterbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
   .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 13px;font-size:13px;
-    cursor:pointer;font-weight:600;color:var(--muted)}
-  .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+    cursor:pointer;font-weight:700;color:var(--muted);transition:all .12s;box-shadow:0 1px 2px rgba(28,74,53,.06)}
+  .chip:hover{border-color:var(--court);color:var(--court)}
+  .chip.on{background:var(--court);color:#fff;border-color:var(--court);box-shadow:0 2px 6px rgba(43,110,79,.3)}
   .modal-bg{position:fixed;inset:0;background:rgba(20,30,40,.45);display:flex;align-items:center;
     justify-content:center;z-index:50;padding:16px}
-  .modal{background:#fff;border-radius:16px;padding:18px;width:100%;max-width:460px;max-height:88vh;overflow:auto}
-  .modal h3{margin:0 0 14px}
+  .modal{background:#fff;border-radius:18px;padding:20px;width:100%;max-width:460px;max-height:88vh;overflow:auto;
+    box-shadow:0 10px 40px rgba(28,74,53,.3);border-top:5px solid var(--ball)}
+  .modal h3{margin:0 0 14px;color:var(--court-deep)}
   .field{margin-bottom:12px}
   .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px}
   select,input[type=text],input[type=number]{width:100%;padding:9px;border:1px solid var(--line);
@@ -77,14 +110,23 @@
     font-size:13px;margin-bottom:14px}
   .pill{display:inline-block;background:#eef1f4;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:600}
   .empty-note{color:var(--muted);font-size:13px;padding:20px;text-align:center}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:240px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:240px;
+    box-shadow:var(--shadow)}
   .danger{color:var(--busy)}
-  .standings{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 12px;margin-bottom:16px;overflow:auto}
-  .standings table{background:transparent}
-  .standings td,.standings th{border-bottom:1px solid var(--line);white-space:nowrap}
+  /* 順位表：スコアボード風 */
+  .standings{background:linear-gradient(160deg,var(--court-deep),var(--court));border:0;border-radius:16px;
+    padding:8px 12px;margin-bottom:16px;overflow:auto;box-shadow:var(--shadow)}
+  .standings table{background:transparent;box-shadow:none}
+  .standings th{background:transparent;color:var(--ball);border-bottom:1px solid rgba(255,255,255,.2)}
+  .standings td{color:#fff;border-bottom:1px solid rgba(255,255,255,.12);white-space:nowrap;font-weight:600}
+  .standings tbody tr:nth-child(even){background:rgba(255,255,255,.04)}
+  .standings tbody tr:first-child td:first-child{color:var(--ball);font-weight:800}
   .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
   .mu-select{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
   .teamcards{display:flex;gap:18px;flex-wrap:wrap}
+  /* ヘッダー上の取り込みボタンはボールイエローで目立たせる */
+  #importBtn{background:linear-gradient(135deg,var(--ball),var(--ball-deep));color:var(--court-deep);
+    box-shadow:0 2px 8px rgba(0,0,0,.25);border-radius:20px}
 </style>
 </head>
 <body>
