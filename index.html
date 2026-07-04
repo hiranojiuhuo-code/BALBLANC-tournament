@@ -148,25 +148,6 @@
   .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
   .mu-select{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
   .teamcards{display:flex;gap:18px;flex-wrap:wrap}
-  /* ランキングレース */
-  .race-track{background:linear-gradient(160deg,#377a58,#2b6e4f);border-radius:14px;padding:14px 12px;
-    position:relative;overflow:hidden;margin-bottom:12px}
-  .race-track::before{content:'';position:absolute;top:10px;bottom:10px;right:52px;width:3px;
-    background:repeating-linear-gradient(0deg,#fff 0 8px,transparent 8px 16px);opacity:.8}
-  .race-lane{position:relative;height:58px;border-bottom:1.5px dashed rgba(255,255,255,.25)}
-  .race-lane:last-child{border-bottom:0}
-  .race-goal{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:26px;z-index:1}
-  .race-runner{position:absolute;left:0%;top:50%;transform:translateY(-50%);transition:left .8s cubic-bezier(.2,.8,.3,1.1);
-    display:flex;align-items:center;gap:6px;z-index:2;max-width:100%}
-  .rr-emoji{font-size:30px;display:inline-block;transform:scaleX(-1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.3))}
-  .race-runner.running .rr-emoji{animation:hop .45s ease-in-out infinite}
-  @keyframes hop{0%,100%{transform:scaleX(-1) translateY(0)}50%{transform:scaleX(-1) translateY(-5px) rotate(-4deg)}}
-  .rr-label{display:flex;flex-direction:column;line-height:1.15}
-  .rr-name{font-size:12px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.4);white-space:nowrap}
-  .rr-score{font-size:11px;font-weight:800;color:var(--ball);font-family:'Outfit',sans-serif}
-  #race-caption{min-height:44px;background:#f4f7f3;border-radius:12px;padding:9px 13px;font-size:13px;
-    font-weight:700;display:flex;align-items:center;gap:8px}
-  .race-medal{font-size:15px}
   /* パスコードゲート */
   #gate{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;
     background:linear-gradient(160deg,var(--court-deep),var(--court) 70%,#35825e)}
@@ -582,14 +563,12 @@ function renderStats(){
         <td style="font-weight:800;color:var(--busy)">${r.l}</td>
         <td style="font-weight:700">${rate}</td></tr>`;
     }).join('');
-    return `<div class="pool-section"><div class="pool-title">${icon} ${label}
-        <button class="btn ghost sm" data-act="race" data-kind="${g}">🏁 上位3人のレースを見る</button></div>
+    return `<div class="pool-section"><div class="pool-title">${icon} ${label}</div>
       <table><thead><tr><th>#</th><th>選手</th><th>チーム</th><th>出場</th><th>勝</th><th>敗</th><th>勝率</th></tr></thead>
       <tbody>${body||'<tr><td colspan=7 class="empty-note">選手がいません</td></tr>'}</tbody></table></div>`;
   }
 
-  return `<div class="pool-section"><div class="pool-title">🏆 チーム成績
-      <button class="btn ghost sm" data-act="race" data-kind="team">🏁 チームレースを見る</button></div>
+  return `<div class="pool-section"><div class="pool-title">🏆 チーム成績</div>
     <table style="max-width:480px"><thead><tr><th>#</th><th>チーム</th><th>勝</th><th>敗</th></tr></thead>
     <tbody>${teamRows||'<tr><td colspan=4 class="empty-note">チームがいません</td></tr>'}</tbody></table></div>
     <div class="filterbar">${teamChips}</div><div class="filterbar">${catChips}</div>
@@ -701,96 +680,8 @@ function fillArchiveList(){
   }).catch(()=>{ box.innerHTML='<div class="empty-note">アーカイブを読み込めませんでした</div>'; });
 }
 
-/* ============================ ランキングレース ============================ */
-const RACE_EMOJI=['🐰','🦊','🐢','🐸','🐼','🐨','🐱','🐶'];
-let _raceTimer=null;
-// 完了順（finishedAt→登録順）に並べた勝敗つき試合
-function raceEvents(){
-  return data.matches.filter(m=>m.status==='done'&&m.scoreA!=null&&m.scoreA!==m.scoreB)
-    .slice().sort((a,b)=>(a.finishedAt||0)-(b.finishedAt||0)||a.order-b.order);
-}
-function startRace(kind){
-  clearInterval(_raceTimer);
-  let events=raceEvents();
-  let runners, title;
-  if(kind==='team'){
-    title='🏁 チームレース';
-    runners=data.teams.map((t,i)=>({id:t.id,name:t.name,emoji:RACE_EMOJI[i%RACE_EMOJI.length],
-      color:teamColor(t.id),wins:0}));
-  }else{
-    title=kind==='M'?'🏁 男子ランキングレース':'🏁 女子ランキングレース';
-    runners=data.players.filter(p=>p.gender===kind)
-      .map(p=>({id:p.id,name:p.name,emoji:'',color:teamColor(p.teamId),wins:0,
-        final:playerRecord(p.id,'all').w}))
-      .sort((a,b)=>b.final-a.final).slice(0,3);
-    runners.forEach((r,i)=>r.emoji=RACE_EMOJI[i%RACE_EMOJI.length]);
-  }
-  // 個人レースはランナーが出場する試合だけを再生（無関係な実況を流さない）
-  if(kind!=='team'){
-    const ids=new Set(runners.map(r=>r.id));
-    events=events.filter(m=>m.sideA.concat(m.sideB).some(id=>ids.has(id)));
-  }
-  if(!runners.length || !events.length){
-    modal(`<h3>${title}</h3><div class="banner">まだ完了した試合がありません。結果を入力するとレースが見られます。</div>
-      <div class="modal-actions"><button class="btn ghost" data-act="cancel">閉じる</button></div>`);
-    return;
-  }
-  // 最終勝数（スケール用）
-  const finalWins={};
-  runners.forEach(r=>finalWins[r.id]=0);
-  events.forEach(m=>{ winnersOf(m,kind).forEach(id=>{ if(id in finalWins) finalWins[id]++; }); });
-  const maxW=Math.max(1,...Object.values(finalWins));
-  const lanes=runners.map(r=>`<div class="race-lane"><span class="race-goal">🏆</span>
-    <div class="race-runner" id="rr-${r.id}">
-      <span class="rr-emoji">${r.emoji}</span>
-      <div class="rr-label"><span class="rr-name" style="color:${kind==='team'?'#fff':''}">
-        ${kind==='team'?'':`<span class="dot" style="background:${r.color}"></span>`}${r.name}</span>
-      <span class="rr-score" id="rs-${r.id}">0勝</span></div></div></div>`).join('');
-  modal(`<h3>${title}</h3>
-    <div class="race-track">${lanes}</div>
-    <div id="race-caption">🎾 レーススタート！</div>
-    <div class="modal-actions">
-      <button class="btn ghost" data-act="cancel">閉じる</button>
-      <button class="btn primary" data-act="race-replay" data-kind="${kind}">↻ もう一度</button></div>`);
-  const box=document.querySelector('.modal'); if(box) box.style.maxWidth='720px';
-  // 再生
-  let i=0;
-  document.querySelectorAll('.race-runner').forEach(el=>el.classList.add('running'));
-  _raceTimer=setInterval(()=>{
-    if(i>=events.length){
-      clearInterval(_raceTimer);
-      document.querySelectorAll('.race-runner').forEach(el=>el.classList.remove('running'));
-      const rank=runners.slice().sort((a,b)=>b.wins-a.wins);
-      const medals=['🥇','🥈','🥉'];
-      const cap=document.getElementById('race-caption');
-      if(cap) cap.innerHTML='ゴール！ '+rank.map((r,j)=>`<span class="race-medal">${medals[j]||''}</span>${r.name} ${r.wins}勝`).join('　');
-      return;
-    }
-    const m=events[i];
-    const ws=winnersOf(m,kind).filter(id=>runners.some(r=>r.id===id));
-    ws.forEach(id=>{ const r=runners.find(x=>x.id===id); r.wins++;
-      const el=document.getElementById('rr-'+id), sc=document.getElementById('rs-'+id);
-      if(el) el.style.left=(r.wins/maxW*72)+'%';
-      if(sc) sc.textContent=r.wins+'勝';
-    });
-    const cap=document.getElementById('race-caption');
-    if(cap){
-      const winSide=m.scoreA>m.scoreB?m.sideA:m.sideB;
-      cap.innerHTML=`<span class="mc-tag ${m.cat}">${matchLabel(m)}</span> ${names(winSide)} が勝利！`;
-    }
-    i++;
-  },1100);
-}
-// この試合の勝者（kind=teamならチームid、それ以外は選手id配列）
-function winnersOf(m,kind){
-  const aWin=m.scoreA>m.scoreB;
-  if(kind==='team'){ const mu=muById(m.matchupId); if(!mu) return [];
-    return [aWin?mu.aId:mu.bId]; }
-  return aWin?m.sideA:m.sideB;
-}
-
 /* ============================ モーダル ============================ */
-function closeModal(){ clearInterval(_raceTimer); document.getElementById('modal-root').innerHTML=''; }
+function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
 let _confirmCb=null, _promptCb=null;
 function confirmModal(msg, cb){ _confirmCb=cb;
   modal(`<h3>確認</h3><p style="margin-top:0">${msg}</p>
@@ -953,7 +844,7 @@ function handleAct(e){
     case 'finish': openFinish(id); break;
     case 'do-finish': { const m=data.matches.find(x=>x.id===id);
       m.scoreA=+document.getElementById('fa').textContent||0; m.scoreB=+document.getElementById('fb').textContent||0;
-      m.status='done'; m.court=null; m.finishedAt=Date.now(); closeModal(); render(); toast('結果を記録しました'); break; }
+      m.status='done'; m.court=null; closeModal(); render(); toast('結果を記録しました'); break; }
     case 'add': openEditMatch(null); break;
     case 'edit': openEditMatch(id); break;
     case 'save-match': { collectSidesFromModal();
@@ -1037,8 +928,6 @@ function handleAct(e){
     case 'add-matchup': { const a=document.getElementById('mu-a').value, b=document.getElementById('mu-b').value;
       if(!a||!b||a===b){ toast('異なる2チームを選んでください'); return; } ensureMatchup(a,b); syncMatchups(); render(); break; }
     case 'reset-all': if(confirm('すべての大会データ（チーム・対抗戦・試合）を消去します。よろしいですか？')){ const ai=data.ai; data=defaultData(); data.ai=ai; curMu='__all'; render(); } break;
-    case 'race': startRace(this.dataset.kind); break;
-    case 'race-replay': startRace(this.dataset.kind); break;
     case 'go-settings': closeModal(); view='settings'; document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x.dataset.view==='settings')); render(); break;
     case 'apply-import': applyExtraction(); break;
     case 'cancel': closeModal(); break;
