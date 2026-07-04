@@ -207,6 +207,7 @@
     <button data-view="board" class="active">進行ボード</button>
     <button data-view="list">試合一覧</button>
     <button data-view="players">選手・チーム</button>
+    <button data-view="stats">個人成績</button>
     <button data-view="saves">保存データ</button>
     <button data-view="settings">設定</button>
   </nav>
@@ -371,8 +372,22 @@ function standings(){
   return Object.values(map).sort((x,y)=> y.muW-x.muW || (y.mw-y.ml)-(x.mw-x.ml) || y.mw-x.mw);
 }
 
+// 個人成績：done かつスコア入力済みの試合から集計
+function playerRecord(pid, catFilter){
+  let w=0,l=0,gf=0,ga=0;
+  data.matches.forEach(m=>{
+    if(m.status!=='done'||m.scoreA==null) return;
+    if(catFilter&&catFilter!=='all'&&m.cat!==catFilter) return;
+    const inA=m.sideA.includes(pid), inB=m.sideB.includes(pid);
+    if(!inA&&!inB) return;
+    const my=inA?m.scoreA:m.scoreB, op=inA?m.scoreB:m.scoreA;
+    gf+=my; ga+=op; if(my>op)w++; else if(op>my)l++;
+  });
+  return {w,l,gf,ga,played:w+l};
+}
+
 /* ============================ 描画 ============================ */
-let view='board', listFilter='all', listMu='all', curMu='__all';
+let view='board', listFilter='all', listMu='all', curMu='__all', statsTeam='all', statsCat='all';
 
 function render(){
   document.getElementById('appTitle').textContent = data.title||'対抗戦 進行管理';
@@ -381,6 +396,7 @@ function render(){
   if(view==='board') app.innerHTML=renderBoard();
   else if(view==='list') app.innerHTML=renderList();
   else if(view==='players') app.innerHTML=renderPlayers();
+  else if(view==='stats') app.innerHTML=renderStats();
   else if(view==='saves'){ app.innerHTML=renderSaves(); fillArchiveList(); }
   else if(view==='settings') app.innerHTML=renderSettings();
   bindView(); save();
@@ -507,11 +523,39 @@ function renderPlayers(){
   data.teams.forEach(t=>{ const ps=data.players.filter(p=>p.teamId===t.id);
     out+=`<div class="card" style="flex:1;min-width:200px">
       <h3 style="margin-top:0;color:${teamColor(t.id)}">${t.name}（${ps.length}名）</h3>
-      <table><tbody>${ps.map(p=>`<tr><td>${p.name}</td><td>${p.gender==='M'?'男':p.gender==='F'?'女':'-'}</td>
-        <td style="text-align:right"><button class="btn ghost sm" data-act="edit-player" data-id="${p.id}">編集</button></td></tr>`).join('')||'<tr><td class="empty-note">選手なし</td></tr>'}</tbody></table>
+      <table><tbody>${ps.map(p=>{const r=playerRecord(p.id,'all');
+        return `<tr><td>${p.name}</td><td>${p.gender==='M'?'男':p.gender==='F'?'女':'-'}</td>
+        <td style="font-size:12px">${r.played?`<b style="color:var(--ready)">${r.w}</b>-<b style="color:var(--busy)">${r.l}</b>`:'<span style="color:var(--muted)">—</span>'}</td>
+        <td style="text-align:right"><button class="btn ghost sm" data-act="edit-player" data-id="${p.id}">編集</button></td></tr>`;}).join('')||'<tr><td class="empty-note">選手なし</td></tr>'}</tbody></table>
       <button class="btn ghost sm" data-act="add-player" data-team="${t.id}" style="margin-top:10px">＋ 選手を追加</button></div>`;
   });
   return out+'</div>';
+}
+
+function renderStats(){
+  const cats=[['all','すべて'],['S','シングルス'],['D','ダブルス'],['M','ミックス']];
+  let teamChips=`<span class="chip ${statsTeam==='all'?'on':''}" data-steam="all">全チーム</span>`+
+    data.teams.map(t=>`<span class="chip ${statsTeam===t.id?'on':''}" data-steam="${t.id}">${t.name}</span>`).join('');
+  let catChips=cats.map(c=>`<span class="chip ${statsCat===c[0]?'on':''}" data-scat="${c[0]}">${c[1]}</span>`).join('');
+  let ps=data.players.filter(p=>statsTeam==='all'||p.teamId===statsTeam);
+  const rows=ps.map(p=>{ const r=playerRecord(p.id,statsCat);
+    return {p, r, rate: r.played? r.w/r.played : -1};
+  }).sort((a,b)=> b.r.w-a.r.w || b.rate-a.rate || (b.r.gf-b.r.ga)-(a.r.gf-a.r.ga));
+  const body=rows.map((x,i)=>{ const p=x.p,r=x.r;
+    const rate=r.played?Math.round(r.w/r.played*100)+'%':'—';
+    return `<tr>
+      <td>${r.played?i+1:'—'}</td>
+      <td><span class="dot" style="background:${teamColor(p.teamId)}"></span>${p.name}</td>
+      <td style="font-size:11px;color:var(--muted)">${tName(p.teamId)}</td>
+      <td>${r.played}</td>
+      <td style="font-weight:800;color:var(--ready)">${r.w}</td>
+      <td style="font-weight:800;color:var(--busy)">${r.l}</td>
+      <td style="font-weight:700">${rate}</td></tr>`;
+  }).join('');
+  return `<div class="filterbar">${teamChips}</div><div class="filterbar">${catChips}</div>
+    <table><thead><tr><th>#</th><th>選手</th><th>チーム</th><th>出場</th><th>勝</th><th>敗</th><th>勝率</th></tr></thead>
+    <tbody>${body||'<tr><td colspan=7 class="empty-note">選手がいません</td></tr>'}</tbody></table>
+    <div class="empty-note">完了した試合の結果から自動集計されます。</div>`;
 }
 
 function renderSettings(){
@@ -745,6 +789,8 @@ function bindView(){
   app.querySelectorAll('[data-filter]').forEach(el=>el.addEventListener('click',()=>{ listFilter=el.dataset.filter; render(); }));
   app.querySelectorAll('[data-mu]').forEach(el=>el.addEventListener('click',()=>{ curMu=el.dataset.mu; render(); }));
   app.querySelectorAll('[data-listmu]').forEach(el=>el.addEventListener('click',()=>{ listMu=el.dataset.listmu; render(); }));
+  app.querySelectorAll('[data-steam]').forEach(el=>el.addEventListener('click',()=>{ statsTeam=el.dataset.steam; render(); }));
+  app.querySelectorAll('[data-scat]').forEach(el=>el.addEventListener('click',()=>{ statsCat=el.dataset.scat; render(); }));
   const imp=document.getElementById('save-import');
   if(imp) imp.addEventListener('change',async e=>{
     const f=e.target.files[0]; if(!f) return;
